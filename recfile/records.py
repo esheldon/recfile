@@ -48,7 +48,6 @@ except AttributeError:
 del types
 
 
-_FILE_OFFSET_BITS = _records._FILE_OFFSET_BITS
 class Records(_object):
     __swig_setmethods__ = {}
     __setattr__ = lambda self, name, value: _swig_setattr(self, Records, name, value)
