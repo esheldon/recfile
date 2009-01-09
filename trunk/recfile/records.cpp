@@ -422,7 +422,7 @@ void Records::SkipField(long long fnum)
 void Records::SkipFieldAsBinary(long long fnum)
 {
 	// Skip this field
-	if(fseek(mFptr, mSizes[fnum], SEEK_CUR) != 0) {
+	if(fseeko(mFptr, mSizes[fnum], SEEK_CUR) != 0) {
 		string err="Error skipping field: "+mNames[fnum];
 		throw err.c_str();
 	}
@@ -486,7 +486,7 @@ void Records::SkipAsciiRows(long long nskip)
 void Records::SkipBinaryRows(long long nskip)
 {
 	if (nskip > 0) {
-		if (fseek(mFptr, mRowSize*nskip, SEEK_CUR) != 0) {
+		if (fseeko(mFptr, mRowSize*nskip, SEEK_CUR) != 0) {
 			throw "Failed to fseek";
 		}
 	}
