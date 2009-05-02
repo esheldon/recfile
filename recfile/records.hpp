@@ -1,6 +1,7 @@
 #include <Python.h>
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <string>
 #include <sstream>
 #include <stdexcept>

@@ -71,6 +71,14 @@ Modification history:
 
 # This is a wrapper that returns an instance of the Records
 # class.  
-from .records import Records
-from .Util import Open
-from .Util import test
+
+# this only works in 2.5
+#from .records import Records
+#from .Util import Open
+#from .Util import test
+
+from records import Records
+import Util
+from Util import Open
+from Util import test
+
