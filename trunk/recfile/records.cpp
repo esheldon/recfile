@@ -580,7 +580,7 @@ void Records::WriteAllAsBinary()
 {
 	// This is easy!
 	if (mDebug) DebugOut("Writing in one big fwrite");
-	size_t nwrite = fwrite(mData, mRowSize, mNrows, mFptr);
+	npy_intp nwrite = fwrite(mData, mRowSize, mNrows, mFptr);
 	if (nwrite < mNrows) {
 		stringstream serr;
 		string err;

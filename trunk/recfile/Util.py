@@ -1,5 +1,7 @@
 import numpy
-from . import records
+# this only works in 2.5
+#from . import records
+import records
 import sys
 import os
 import math
