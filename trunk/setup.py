@@ -12,6 +12,7 @@ module1 = Extension('recfile._records',
 
 
 setup(name='recfile',
+      version='0.10',
       version='0.92',
       description='This is a test',
       packages=['recfile'],
