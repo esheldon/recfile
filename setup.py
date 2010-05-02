@@ -2,13 +2,13 @@ from distutils.core import setup, Extension
 import numpy
 import os
 
-#module1 = Extension('readfields._readfields2', 
-#                    sources=['readfields/src/readfields2.cpp',
-#                             'readfields/src/readfields2_wrap.cpp'])
 
-module1 = Extension('recfile._records', 
-                    sources=['recfile/records.cpp',
-                             'recfile/records_wrap.cpp'])
+subdir = 'recfile'
+sources=['records.cpp', 'records_wrap.cpp']
+
+# platform independent paths
+sources = [os.path.join(subdir,f) for f in sources]
+module1 = Extension('recfile._records', sources=sources)
 
 
 setup(name='recfile',
