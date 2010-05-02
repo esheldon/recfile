@@ -5,6 +5,7 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
+#include <stdint.h>
 #include "numpy/arrayobject.h"
 
 #ifndef _readfields_2_h
@@ -90,7 +91,7 @@ Modification history:
 #endif
 		Records(PyObject* fileobj, 
 				const char* mode, // mode won't be used if file is object
-				PyObject* delim, 
+				PyObject* delim=NULL, 
 				PyObject* dtype=NULL,
 				long long nrows=-9999) throw (const char *);
 
@@ -133,16 +134,32 @@ Modification history:
 				PyObject* rows=NULL,
 				PyObject* fields=NULL) throw (const char*);
 
+        PyObject* ReadSlice(long long row1, long long row2, long long step) throw (const char*);
+
 #ifdef SWIG
 %feature("docstring",
 		"
-		Write(numpy_array)
+		Write(numpy_array, pad=False)
 
 		A class method for the Records class.  Writes the input numpy array
 		to the opened file.
 
 		Inputs:
 		    array: A NumPy array with fields defined for the records.
+		Keywords:
+			padnull=False:  
+				Convert NULL characters to spaces when writing.  Note when
+				read back in these will not compare equal with the original
+				data!  This is useful when writing files to be read in by
+				programs that do not recognize null characters, e.g. sqlite
+				databases.
+
+			ignorenull=False:
+				Ignore NULL characters entirely when writing strings to ascii
+				files. This is useful when writing files to be read in by
+				programs that do not recognize null characters, e.g. sqlite
+				databases.
+
 		Examples:
 		    import numpy
 		    import records
@@ -150,7 +167,10 @@ Modification history:
 		    r.Write(my_array)
 		");
 #endif
-		PyObject* Write(PyObject* obj) throw (const char *);
+		PyObject* Write(
+				PyObject* obj, 
+				bool padnull=false,
+				bool ignorenull=false) throw (const char *);
 
 #ifdef SWIG
 %feature("docstring",
@@ -174,13 +194,19 @@ Modification history:
 		void CreateOutputArray();
 
 		void ReadPrepare();
-
+        npy_intp ProcessSlice(npy_intp row1, npy_intp row2, npy_intp step);
 		void ReadFromFile();
 		void ReadAllAsBinary();
+
 		void ReadRows();
+
+		void ReadRowsSlice(npy_intp row1, npy_intp step) throw (const char* );
+
 		void ReadRow();
-		void ReadFields();
-		void ReadField(long long fnum);
+		void ReadAsciiFields();
+		void ReadBinaryFields();
+		void DoSeek(npy_intp seek_distance);
+		//void ReadField(long long fnum);
 		void ReadFieldAsBinary(long long fnum);
 		void ReadFieldAsAscii(long long fnum);
 		void ReadAsciiBytes(long long fnum);
@@ -318,7 +344,8 @@ Modification history:
 		bool mReadWholeRowBinary;                              //---
 
 
-
+		bool mPadNull;
+		bool mIgnoreNull;
 
 
         // Info about each row of file

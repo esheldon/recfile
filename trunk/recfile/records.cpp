@@ -78,7 +78,7 @@ Records::~Records()
 	// Always decref.  Either null or a new reference to mTypeDescr
 	Py_XDECREF(mKeepTypeDescr);
 
-	// This is also a copy
+	// This may or may not be a copy, but we must decref 
 	Py_XDECREF(mRowsToRead);
 
 	Close();
@@ -139,6 +139,34 @@ void Records::InitializeVariables()
 
 }
 
+PyObject* Records::ReadSlice(long long row1, long long row2, long long step)  throw (const char* )
+{
+	if (mFptr == NULL) {
+		throw "File is not open";
+	}
+	if (mAction != READ) {
+		throw "File is not open for reading";
+	}
+
+	// juse some error checking and return implied length
+	mNrowsToRead = ProcessSlice(row1, row2, step);
+
+	// slice we read all fields, so send Py_None
+	ProcessFieldsToRead(Py_None);
+	CreateOutputArray();
+
+	ReadPrepare();
+
+
+	if (mReadWholeFileBinary) {
+		ReadAllAsBinary();
+	} else {
+		ReadRowsSlice(row1, step);
+	}
+
+	return (PyObject* ) mReturnObject;
+}
+
 PyObject* Records::Read(
 		PyObject* rows,
 		PyObject* fields) throw (const char* )
@@ -161,29 +189,6 @@ PyObject* Records::Read(
 }
 
 
-
-/*
-PyObject* Records::Read(
-		PyObject* descr, 
-		long long nrows, 
-		PyObject* rows,
-		PyObject* fields) throw (const char* )
-{
-	if (mFptr == NULL) {
-		throw "File is not open";
-	}
-	ProcessDescr(descr);
-	ProcessNrows(nrows);
-	ProcessRowsToRead(rows);
-	ProcessFieldsToRead(fields);
-	CreateOutputArray();
-	ReadPrepare();
-
-	ReadFromFile();
-
-	return (PyObject* ) mReturnObject;
-}
-*/
 
 void Records::ReadPrepare()
 {
@@ -218,7 +223,6 @@ void Records::ReadAllAsBinary()
 		throw "Error reading entire file as binary";
 	} 
 }
-
 
 
 // need to use long long
@@ -258,27 +262,40 @@ void Records::ReadRows()
 
 }
 
-
-
-
-void Records::ReadRow()
+void Records::ReadRowsSlice(npy_intp row1, npy_intp step) throw (const char* )
 {
-	if (mReadWholeRowBinary) {
-		// We can read a whole line if reading all fields
-		ReadWholeRowBinary();
+
+	if (mDebug) DebugOut("Reading rows by slice");
+
+	if (step == 1 && mFileType == BINARY_FILE) {
+
+		// We can just read a big chunk
+		if (row1 > 0) {
+			SkipRows(0, row1);
+		}
+
+		npy_intp nread = fread(mData, mRowSize, mNrowsToRead, mFptr);
+		if (nread != mNrowsToRead) {
+			throw "Error reading slice";
+		} 
+
 	} else {
-		// Reading particular fields
-		ReadFields();
-	}
-}
 
-void Records::ReadFields()
-{
-	for (npy_intp fnum=0; fnum<mNfields; fnum++) {
-		if (mKeep[fnum]) {
-			ReadField(fnum);
-		} else {
-			SkipField(fnum);
+		npy_intp row2read = row1;
+		npy_intp current_row = 0;
+
+		for (npy_intp irow=0;  irow<mNrowsToRead; irow++) {
+
+			// Skip rows
+			if (row2read > current_row) {
+				SkipRows(current_row, row2read);
+				current_row=row2read;
+			} 
+
+			ReadRow();
+
+			current_row++;
+			row2read += step;
 		}
 	}
 
@@ -287,7 +304,72 @@ void Records::ReadFields()
 
 
 
+void Records::ReadRow()
+{
+	if (mReadWholeRowBinary) {
+		// We can read a whole line if reading all fields
+		ReadWholeRowBinary();
+		
+	} else if (mFileType == BINARY_FILE) {
+		// Reading particular fields of a binary file.
+		ReadBinaryFields();
+	
+	} else {
+		// Reading particular fields
+		ReadAsciiFields();
+	}
+}
 
+void Records::ReadBinaryFields()
+{
+	// use messy code here for a significant speedup
+	npy_intp 
+		last_offset=0, last_fsize=0, seek_distance=0, offset=0;
+
+	for (npy_intp fnum=0; fnum<mNfields; fnum++) {
+		if (mKeep[fnum]) {
+			// How far to we move before we read this data?
+			offset  = mOffsets[fnum];
+			seek_distance = offset-(last_offset + last_fsize);
+
+			// This could be zero if we didn't skip any fields
+			DoSeek(seek_distance);
+
+			// Read the data
+			ReadFieldAsBinary(fnum);
+
+			last_offset=offset;
+			last_fsize=mSizes[fnum];
+		}
+	}
+
+	// Do we need to move past any remaining fields?
+	seek_distance = mRowSize - (last_offset+last_fsize);
+	DoSeek(seek_distance);
+
+}
+
+void Records::DoSeek(npy_intp seek_distance) {
+	if (seek_distance > 0) {
+		if(fseeko(mFptr, seek_distance, SEEK_CUR) != 0) {
+			string err="Error skipping fields";
+			throw err.c_str();
+		}
+	}
+}
+
+void Records::ReadAsciiFields()
+{
+	for (npy_intp fnum=0; fnum<mNfields; fnum++) {
+		// This program understands when a field is skipped
+		ReadFieldAsAscii(fnum);
+	}
+}
+
+
+
+
+/*
 void Records::ReadField(long long fnum)
 {
 	if (mFileType == BINARY_FILE) {
@@ -296,6 +378,7 @@ void Records::ReadField(long long fnum)
 		ReadFieldAsAscii(fnum);
 	}
 }
+*/
 
 
 
@@ -533,7 +616,10 @@ void Records::CreateOutputArray()
 	mData = mReturnObject->data;
 }
 
-PyObject* Records::Write(PyObject* obj) throw (const char* )
+PyObject* Records::Write(
+		PyObject* obj, 
+		bool padnull,
+		bool ignorenull) throw (const char* )
 {
 	if (mFptr == NULL) {
 		throw "File is not open";
@@ -545,12 +631,17 @@ PyObject* Records::Write(PyObject* obj) throw (const char* )
 	PyObject* ret=Py_None;
 	Py_INCREF(Py_None);
 
+
 	if (!PyArray_Check(obj)) {
 		throw "Input must be a NumPy array object";
 	}
 	mNrows = PyArray_Size(obj);
 
 	PyArray_Descr* descr = PyArray_DESCR(obj);
+
+	// Null characters in strings are converted to spaces
+	mPadNull = padnull;
+	mIgnoreNull = ignorenull;
 
 	CopyFieldInfo(
 			descr,
@@ -605,19 +696,54 @@ void Records::WriteRows()
 	for (long long row=0; row< mNrows; row++) {
 		for (long long fnum=0; fnum< mNfields; fnum++) {
 
+			WriteField(fnum);
+			/*
 			long long nel=mNel[fnum];
 			long long elsize = mSizes[fnum]/nel;
 
 			for (long long el=0; el< nel; el++) {
-				WriteField(fnum);
+				WriteField(fnum,el);
 				mData += elsize;
 			} // elements of this field
+			*/
 		} // fields
 		// Write the newline character
 		fputc('\n', mFptr);
 	} // rows
 }
 
+void Records::WriteField(long long fnum) 
+{
+
+	long long nel=mNel[fnum];
+	long long elsize = mSizes[fnum]/nel;
+	long long type_num = mTypeNums[fnum];
+
+	for (long long el=0; el<nel; el++) {
+
+		if (type_num == NPY_STRING) {
+			WriteStringAsAscii(fnum);
+		} else {
+			WriteNumberAsAscii(mData, type_num);
+		}
+
+		// Add a delimiter between elements
+		if (el < (nel-1) ) {
+			fprintf(mFptr, "%s", mDelim.c_str());
+		}
+
+		mData += elsize;
+
+	}
+
+	// Also will add a delim after the field
+	if ( fnum < (mNfields-1) ) {
+		fprintf(mFptr, "%s", mDelim.c_str());
+	}
+
+}
+
+/*
 void Records::WriteField(long long fnum) 
 {
 	if (mTypeNums[fnum] == NPY_STRING) {
@@ -627,8 +753,11 @@ void Records::WriteField(long long fnum)
 	}
 	if ( fnum < (mNfields-1) ) {
 		fprintf(mFptr, "%s", mDelim.c_str());
+		// Trying single char
+		//fputc(mDelim[0], mFptr);
 	}
 }
+*/
 
 void Records::WriteStringAsAscii(long long fnum)
 {
@@ -639,6 +768,16 @@ void Records::WriteStringAsAscii(long long fnum)
 	long long slen = mSizes[fnum]/mNel[fnum];
 	for (long long i=0; i<slen; i++) {
 		char c=buffer[0];
+		if (c == '\0') {
+			if (mIgnoreNull) {
+				// we assume the user cares about nothing beyond the null
+				// this will break out of writing this the rest of this field.
+				break;
+			}
+			if ( mPadNull ) {
+				c=' ';
+			}
+		}
 		int res = fputc( (int) c, mFptr);
 		if (res == EOF) {
 			throw "Error occured writing string field";
@@ -774,6 +913,38 @@ void Records::ProcessFieldsToRead(PyObject* fields)
 
 }
 
+npy_intp Records::ProcessSlice(npy_intp row1, npy_intp row2, npy_intp step)
+{
+	// Just do some error checking on the requested rows
+	stringstream serr;
+	if (row1 < 0) {
+		serr<<"Requested first row < 0";
+		throw serr.str().c_str();
+	}
+	if (row2 > mNrows) {
+		serr<<"Requested slice beyond delcared size "<<mNrows;
+		throw serr.str().c_str();
+	}
+
+	if (step <= 0) {
+		serr<<"Requested step must be > 0";
+		throw serr.str().c_str();
+	}
+
+	// we use python slicing rules:  [n1:n2:step] really means  from n1 to n2-1
+	// so the number of rows to read is simply (n2-n1)/step + (n2-21) % step
+	npy_intp rdiff = (row2-row1);
+
+	npy_intp extra = 0;
+	if ((rdiff % step) != 0) {
+		extra = 1;
+	}
+	npy_intp nrows = rdiff/step + extra;
+	return nrows;
+}
+
+
+
 void Records::ProcessRowsToRead(PyObject* rows)
 {
 	// Convert to an array of the desired type.  We will xdecref this 
@@ -784,6 +955,13 @@ void Records::ProcessRowsToRead(PyObject* rows)
 	} else {
 		// How many to read
 		mNrowsToRead = PyArray_SIZE(mRowsToRead);
+	}
+
+	if (mNrowsToRead > mNrows) {
+		stringstream serr;
+		serr<<"You said the file has "<<mNrows<<" rows but requested to read "
+			<<mNrowsToRead<<" rows";
+		throw serr.str().c_str();
 	}
 
 	if (mDebug) {
@@ -864,13 +1042,13 @@ void Records::GetFptr(PyObject* file_obj, const char* mode)
 
 void Records::ProcessDelim(PyObject* delim_obj)
 {
-	if (delim_obj == NULL) {
+	if (delim_obj == NULL || delim_obj == Py_None) {
 		mDelim="";
 	} else {
 		if (PyString_Check(delim_obj)) {
 			mDelim = PyString_AsString(delim_obj);
 		} else {
-			throw "delim keyword must be a string"; 
+			throw "delim keyword must be a string or None"; 
 		}
 	}
 
