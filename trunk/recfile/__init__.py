@@ -136,9 +136,13 @@ Classes
         data = robj[fields2get][rows2get]
 
 
-        # Write a numpy array to a file
-        r = recfile.Open('test.tab', "w", ",")
+        # Write a numpy array to a file, with ability to
+        # append
+        r = recfile.Open('test.tab', "r+", ",")
         r.Write(my_array)
+
+        # append more rows
+        r.Write(second_array)
 
     Todo:
         implement auto-getting of size for ascii
