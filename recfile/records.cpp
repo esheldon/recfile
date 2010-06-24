@@ -1,51 +1,16 @@
 #include "records.hpp"
 
-/*
-Records::Records() throw (const char*)
-{
-	InitializeVariables();
-	import_array();
-}
-
-Records::Records(
-		PyObject* file_obj, 
-		const char* mode, 
-		PyObject* delim_obj)
-	throw (const char *)
-{
-	Open(file_obj, mode, delim_obj);
-	import_array();
-}
-
-PyObject* Records::Open(
-		PyObject* file_obj, 
-		const char* mode, 
-		PyObject* delim_obj) throw (const char*)
-{
-	PyObject* ret=NULL;
-	ret = Py_None;
-	Py_INCREF(Py_None);
-
-	InitializeVariables();
-
-	mMode=mode;
-	GetFptr(file_obj, mMode.c_str());
-	ProcessDelim(delim_obj);
-	SetFileType();
-
-	return ret;
-}
-
-*/
-
 Records::Records(PyObject* fileobj, 
 		const char* mode,
 		PyObject* delimobj, 
 		PyObject* dtype,
-		long long nrows) throw (const char *)
+		long long nrows,
+        int bracket_arrays) throw (const char *)
 {
 	import_array();
 	InitializeVariables();
+
+    mBracketArrays = bracket_arrays;
 
 	mMode=mode;
 	GetFptr(fileobj, mMode.c_str());
@@ -117,6 +82,7 @@ void Records::InitializeVariables()
 	mFptrIsLocal=false;
 
 	mDelim="";
+    mArrayDelim="";
 
 	// must be set later!!
 	mAction=READ;
@@ -135,6 +101,7 @@ void Records::InitializeVariables()
 	mNrows=0;
 	mNrowsToRead=0;
 
+    mBracketArrays=0;
 	return;
 
 }
@@ -719,6 +686,10 @@ void Records::WriteField(long long fnum)
 	long long elsize = mSizes[fnum]/nel;
 	long long type_num = mTypeNums[fnum];
 
+    if (mBracketArrays && nel > 1) {
+        fprintf(mFptr,"{");
+    }
+
 	for (long long el=0; el<nel; el++) {
 
 		if (type_num == NPY_STRING) {
@@ -729,12 +700,20 @@ void Records::WriteField(long long fnum)
 
 		// Add a delimiter between elements
 		if (el < (nel-1) ) {
-			fprintf(mFptr, "%s", mDelim.c_str());
+            if (nel > 1) {
+                fprintf(mFptr, "%s", mArrayDelim.c_str());
+            } else {
+                fprintf(mFptr, "%s", mDelim.c_str());
+            }
 		}
 
 		mData += elsize;
 
 	}
+
+    if (mBracketArrays && nel > 1) {
+        fprintf(mFptr,"}");
+    }
 
 	// Also will add a delim after the field
 	if ( fnum < (mNfields-1) ) {
@@ -1044,9 +1023,16 @@ void Records::ProcessDelim(PyObject* delim_obj)
 {
 	if (delim_obj == NULL || delim_obj == Py_None) {
 		mDelim="";
+        mArrayDelim="";
 	} else {
 		if (PyString_Check(delim_obj)) {
 			mDelim = PyString_AsString(delim_obj);
+
+            if (mBracketArrays) {
+                mArrayDelim = ",";
+            } else {
+                mArrayDelim = mDelim;
+            }
 		} else {
 			throw "delim keyword must be a string or None"; 
 		}
