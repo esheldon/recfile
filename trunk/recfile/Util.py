@@ -9,18 +9,24 @@ import pprint
 
 
 def Open(fileobj, mode="r", delim=None, dtype=None, 
-         nrows=-9999, offset=0, 
-         padnull=False, ignorenull=False, verbose=False):
+         nrows=-9999, offset=None, skiplines=None,
+         padnull=False, ignorenull=False, 
+         bracket_arrays=False,
+         verbose=False):
     """
     Instantiate a new Recfile class
         For writing:
             import recfile
-            r = recfile.Open(file/fileobj, mode="r", delim=None, 
-                             padnull=False, ignorenull=False, verbose=False)
+            r = recfile.Open(file/fileobj, mode="w", delim=None, 
+                             padnull=False, ignorenull=False, 
+                             bracket_arrays=False,
+                             verbose=False)
+            for updating use mode="r+"
         For reading:
             import recfile
             r = recfile.Open(file/fileobj, delim=None, dtype=None, 
-                             nrows=-9999, offset=0, verbose=False)
+                             nrows=-9999, offset=0, skiplines=0,
+                             verbose=False)
             # Arguments can all be given as keywords except the file
 
         Inputs:
@@ -53,6 +59,11 @@ def Open(fileobj, mode="r", delim=None, dtype=None,
                 strings. Note this will not result in fixed length data so
                 you cannot read it back in using recfile. Useful for 
                 programs that don't understand nulls, like sqlite databases.
+            bracket_arrays: 
+                If True and writing ascii, arrays are written thus: 
+                    {el1,el2,....}
+                Currently the delimiter is forced to be a comma because the
+                authors were implementing postgres input files.
 
     Useful Recfile Class Methods:
 
@@ -83,10 +94,10 @@ def Open(fileobj, mode="r", delim=None, dtype=None,
             data = r[field_names][rowlist] # subset of rows and columns
 
         read(rows=, fields=):
-            Returns the data in a NumPy array.  Specific rows and fields 
-            of the file can be specified with the keywords.  Rows must be
-            sorted and unique.  Fields must be unique but can be in any
-            order.
+            Returns the data in a NumPy array.  Specific rows and fields of the
+            file can be specified with the keywords.  Fields must be unique but
+            can be in any order.
+
         write(numpy_array):
             Write the input numpy array to the file.  The array must have
             field names defined.
@@ -148,15 +159,16 @@ def Open(fileobj, mode="r", delim=None, dtype=None,
 
     Modification history:
         Created: 2008-07-18, Erin Sheldon
-        Wrapper class Recfile added.  This is not returned by Open.  Support
+        Wrapper class Recfile added.  This is returned by Open.  Support
             for [ ] style reading notation. 2009-11-20, ESS, BNL
         Added simple slicing for ASCII.  2010-02-18, Erin Sheldon, BNL
 
     """
     # make sure it's a dtype and not just a descr
     return Recfile(fileobj, mode=mode, delim=delim, dtype=dtype, 
-                   nrows=nrows, offset=offset, 
+                   nrows=nrows, offset=offset, skiplines=skiplines,
                    padnull=padnull, ignorenull=ignorenull, 
+                   bracket_arrays=bracket_arrays,
                    verbose=verbose)
 
 
@@ -167,10 +179,12 @@ class Recfile(object):
             import recfile
             r = recfile.Open(file/fileobj, mode="r", delim=None, 
                              padnull=False, ignorenull=False, verbose=False)
+            for updating use mode="r+"
         For reading:
             import recfile
             r = recfile.Open(file/fileobj, delim=None, dtype=None, 
-                             nrows=-9999, offset=0, verbose=False)
+                             nrows=-9999, offset=0, skiplines=0,
+                             verbose=False)
             # Arguments can all be given as keywords except the file
 
         Inputs:
@@ -203,6 +217,11 @@ class Recfile(object):
                 strings. Note this will not result in fixed length data so
                 you cannot read it back in using recfile. Useful for 
                 programs that don't understand nulls, like sqlite databases.
+            bracket_arrays: 
+                If True and writing ascii, arrays are written thus: 
+                    {el1,el2,....}
+                Currently the delimiter is forced to be a comma because the
+                authors were implementing postgres input files.
 
     Useful Recfile Class Methods:
 
@@ -230,10 +249,10 @@ class Recfile(object):
             data = r[field_names[rowlist] # subset of rows and columns
 
         read(rows=, fields=):
-            Returns the data in a NumPy array.  Specific rows and fields 
-            of the file can be specified with the keywords.  Rows must be
-            sorted and unique.  Fields must be unique but can be in any
-            order.
+            Returns the data in a NumPy array.  Specific rows and fields of the
+            file can be specified with the keywords.  Fields must be unique but
+            can be in any order.
+
         write(numpy_array):
             Write the input numpy array to the file.  The array must have
             field names defined.
@@ -303,26 +322,46 @@ class Recfile(object):
 
 
     def __init__(self, fobj=None, mode="r", delim=None, dtype=None, 
-                 nrows=-9999, offset=0, 
-                 padnull=False, ignorenull=False, verbose=False):
+                 nrows=-9999, offset=None, skiplines=None,
+                 padnull=False, ignorenull=False, 
+                 bracket_arrays=False,
+                 verbose=False):
 
         # an alias
         self.Read = self.read
         self.Write = self.write
         self.open(fobj, mode=mode, delim=delim, dtype=dtype, 
-                  nrows=nrows, offset=offset, 
-                  padnull=padnull, ignorenull=ignorenull, verbose=verbose)
+                  nrows=nrows, offset=offset, skiplines=skiplines,
+                  padnull=padnull, ignorenull=ignorenull, 
+                  bracket_arrays=bracket_arrays,
+                  verbose=verbose)
 
     def open(self, fobj, mode='r', delim=None, dtype=None, 
-             nrows=-9999, offset=0, 
-             padnull=False, ignorenull=False, verbose=False):
+             nrows=-9999, offset=None, skiplines=None,
+             padnull=False, ignorenull=False, 
+             bracket_arrays=False,
+             verbose=False):
 
         self.verbose=verbose
+
+        self.bracket_arrays=bracket_arrays
 
         self.close()
         self.padnull=padnull
         self.ignorenull=ignorenull
         self.delim = delim
+        self.skiplines=skiplines
+        self.offset=offset
+
+        if self.skiplines is None:
+            self.skiplines = 0
+        if self.offset is None:
+            self.offset = 0
+
+        if self.delim is not None and self.delim != "":
+            self.is_ascii = True
+        else:
+            self.is_ascii = False
 
         if fobj is None:
             return
@@ -357,13 +396,26 @@ class Recfile(object):
             self.dtype = numpy.dtype(dtype)
 
             # we only pay attention to the offset when mode is 'r' or 'r+'
-            if offset < 0:
-                offset=0
-            self.offset=offset
-            # go to the offset position in the file
-            if self.offset > 0:
-                self.fobj.seek(offset)
             
+            if self.is_ascii:
+                # for ascii we can skip lines, e.g. for a header
+                # this takes precedence over offset
+                if self.skiplines > 0:
+                    self.nrows -= self.skiplines
+                    for i in xrange(self.skiplines):
+                        tmp = self.fobj.readline()
+
+                    # now, we override any existing offset to our
+                    # position after skipping lines
+                    self.offset = self.fobj.tell()
+
+
+            if self.offset < 0:
+                self.offset=0
+            # go to the offset position in the file
+            if self.fobj.tell() != self.offset:
+                self.fobj.seek(offset)
+
             if nrows is None or nrows < 0:
                 self.nrows = self.get_nrows()
             else:
@@ -372,17 +424,21 @@ class Recfile(object):
         
     def get_nrows(self):
         if self.delim != "" and self.delim is not None:
-            raise ValueError("You must enter nrows >=0 for ascii")
+            # for ascii this can be slow
+            nrows = 0
+            for line in self.fobj:
+                nrows += 1
+            self.fobj.seek(self.offset)
+        else:
+            # For binary, try to figure out the number of rows based on
+            # the number of bytes
 
-        # For binary, try to figure out the number of rows based on
-        # the number of bytes
-
-        rowsize=self.dtype.itemsize
-        # go to end
-        self.fobj.seek(0,2)
-        datasize = self.fobj.tell() - self.offset
-        nrows = datasize/rowsize
-        self.fobj.seek(self.offset)
+            rowsize=self.dtype.itemsize
+            # go to end
+            self.fobj.seek(0,2)
+            datasize = self.fobj.tell() - self.offset
+            nrows = datasize/rowsize
+            self.fobj.seek(self.offset)
 
         return nrows
 
@@ -474,7 +530,8 @@ class Recfile(object):
                             (data.size,pprint.pformat(data.dtype.descr)))
         if (self.delim is not None):
             # let recfile deal with ascii writing
-            r = records.Records(self.fobj, mode='u', delim=self.delim)
+            r = records.Records(self.fobj, mode='u', delim=self.delim, 
+                                bracket_arrays=self.bracket_arrays)
             dataview = data.view(numpy.ndarray) 
             r.Write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
         else:
@@ -553,7 +610,7 @@ class Recfile(object):
 
         return result
 
-    def get_memmap(self, mode='r', view=None, header=False):
+    def get_memmap(self, view=None, header=False):
 
         if self.delim is not None:
             raise ValueError("Cannot memory map ascii files")
@@ -565,7 +622,7 @@ class Recfile(object):
         shape = (self.nrows,)
 
         result = numpy.memmap(self.fobj, dtype=self.dtype, shape=shape, 
-                              mode=mode, offset=self.fobj.tell())
+                              mode=self.fobj.mode, offset=self.fobj.tell())
         if view is not None:
             result = result.view(view)
 
