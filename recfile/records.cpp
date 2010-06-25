@@ -610,14 +610,7 @@ PyObject* Records::Write(
 	mPadNull = padnull;
 	mIgnoreNull = ignorenull;
 
-	CopyFieldInfo(
-			descr,
-			mNames, 
-			mOffsets,
-			mSizes,
-			mNel,
-			mTypeNums,
-			mRowSize);
+	CopyFieldInfo(descr);
 
 	mNfields = mNames.size();
 
@@ -663,16 +656,11 @@ void Records::WriteRows()
 	for (long long row=0; row< mNrows; row++) {
 		for (long long fnum=0; fnum< mNfields; fnum++) {
 
-			WriteField(fnum);
-			/*
-			long long nel=mNel[fnum];
-			long long elsize = mSizes[fnum]/nel;
-
-			for (long long el=0; el< nel; el++) {
-				WriteField(fnum,el);
-				mData += elsize;
-			} // elements of this field
-			*/
+            if (mBracketArrays && mNdim[fnum] > 0) {
+                WriteArrayFieldWithBrackets(fnum);
+            } else {
+                WriteField(fnum);
+            }
 		} // fields
 		// Write the newline character
 		fputc('\n', mFptr);
@@ -686,10 +674,6 @@ void Records::WriteField(long long fnum)
 	long long elsize = mSizes[fnum]/nel;
 	long long type_num = mTypeNums[fnum];
 
-    if (mBracketArrays && nel > 1) {
-        fprintf(mFptr,"{");
-    }
-
 	for (long long el=0; el<nel; el++) {
 
 		if (type_num == NPY_STRING) {
@@ -700,20 +684,12 @@ void Records::WriteField(long long fnum)
 
 		// Add a delimiter between elements
 		if (el < (nel-1) ) {
-            if (nel > 1) {
-                fprintf(mFptr, "%s", mArrayDelim.c_str());
-            } else {
-                fprintf(mFptr, "%s", mDelim.c_str());
-            }
+            fprintf(mFptr, "%s", mDelim.c_str());
 		}
 
 		mData += elsize;
 
 	}
-
-    if (mBracketArrays && nel > 1) {
-        fprintf(mFptr,"}");
-    }
 
 	// Also will add a delim after the field
 	if ( fnum < (mNfields-1) ) {
@@ -722,21 +698,66 @@ void Records::WriteField(long long fnum)
 
 }
 
-/*
-void Records::WriteField(long long fnum) 
+void Records::WriteArrayFieldWithBrackets(long long fnum) 
 {
-	if (mTypeNums[fnum] == NPY_STRING) {
-		WriteStringAsAscii(fnum);
-	} else {
-		WriteNumberAsAscii(mData, mTypeNums[fnum]);
-	}
+
+    // [3,2] looks like this:
+    //   {{0.332407,0.864918},{0.777847,0.915038},{0.969121,0.866417}}
+    // [3,2,4]
+    // {{{0.976173,0.220988,0.207728,0.150891},{0.77637,0.405874,0.817494,0.0382292}},{{0.295267,0.0950662,0.629128,0.584864},{0.331606,0.749993,0.848343,0.430986}},{{0.379886,0.483621,0.280487,0.732344},{0.975598,0.518987,0.75701,0.274867}}}
+
+	long long nel=mNel[fnum];
+	long long elsize = mSizes[fnum]/nel;
+	long long type_num = mTypeNums[fnum];
+
+    // Begin with the first dimension
+    _WriteArrayWithBrackets(fnum, 0);
+
+	// Also will add a regular delim after the field
 	if ( fnum < (mNfields-1) ) {
 		fprintf(mFptr, "%s", mDelim.c_str());
-		// Trying single char
-		//fputc(mDelim[0], mFptr);
 	}
+
 }
-*/
+
+
+void Records::_WriteArrayWithBrackets(long long fnum, long long dim) {
+
+	long long nel=mNel[fnum];
+	long long elsize = mSizes[fnum]/nel;
+	long long type_num = mTypeNums[fnum];
+
+    // size of this dimension
+    long long thisdim = mDims[fnum][dim];
+
+    fprintf(mFptr,"{");
+    for (int i=0; i<thisdim; i++) {
+
+        if (dim < (mNdim[fnum]-1)) {
+            // If we arent' on the last dimension, don't write anything yet
+            // just call recursively
+            _WriteArrayWithBrackets(fnum, dim+1);
+        } else {
+
+            if (type_num == NPY_STRING) {
+                WriteStringAsAscii(fnum);
+            } else {
+                WriteNumberAsAscii(mData, type_num);
+            }
+
+            //WriteNumberAsAscii(mData, type_num);
+            mData += elsize;
+        }
+
+        // Add an array delimiter between elements
+        if (i < (thisdim-1) ) {
+            fprintf(mFptr, "%s", mArrayDelim.c_str());
+        }
+    }
+    fprintf(mFptr,"}");
+}
+
+
 
 void Records::WriteStringAsAscii(long long fnum)
 {
@@ -977,14 +998,7 @@ void Records::ProcessDescr(PyObject* descr)
 	Py_XINCREF(descr);
 
 	// Copy info for each field into a simpler form
-	CopyFieldInfo(
-			(PyArray_Descr* ) mTypeDescr,
-			mNames, 
-			mOffsets,
-			mSizes,
-			mNel,
-			mTypeNums,
-			mRowSize);
+	CopyFieldInfo( (PyArray_Descr* ) mTypeDescr );
 
 	// Each vector should now be number of fields long
 	mNfields = mNames.size();
@@ -1071,23 +1085,23 @@ void Records::SubDtype(
 		vector<long long>& matchids) {
 
 	PyArray_Descr* descr=(PyArray_Descr* ) indescr;
-	vector<string> names;
+	//vector<string> names;
 
 	// make string vector
-	CopyDescrOrderedNames(descr, names);
+	//CopyDescrOrderedNames(descr);
 
 	// This makes sure they end up in the original order: important
 	// for skipping fields and such
 	
 	// First deal with a scalar string or list input
 	if (PyList_Check(subnamesobj)) {
-		ListStringMatch(names, subnamesobj, matchids);
+		ListStringMatch(mNames, subnamesobj, matchids);
 	} else if (PyString_Check(subnamesobj)) {
 		// Must decref
 		PyObject* tmplist = PyList_New(0);
 		// Makes a copy on append.
 		PyList_Append(tmplist, subnamesobj);
-		ListStringMatch(names, tmplist, matchids);
+		ListStringMatch(mNames, tmplist, matchids);
 		Py_XDECREF(tmplist);
 	} else {
 		throw "fields keyword must be string or list";
@@ -1095,7 +1109,8 @@ void Records::SubDtype(
 	vector<string> matchnames;
 	matchnames.resize(matchids.size());
 	for (unsigned long long i=0; i<matchids.size(); i++) {
-		matchnames[i] = names[matchids[i]];
+		//matchnames[i] = names[matchids[i]];
+		matchnames[i] = mNames[matchids[i]];
 	}
 
 	// Now based on the matches create a new dtype
@@ -1182,25 +1197,19 @@ PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* nam
 
 		typestream << fdescr->subarray->base->byteorder;
 		typestream << fdescr->subarray->base->type;
-		//typestring[0] = fdescr->subarray->base->byteorder;
-		//typestring[1] = fdescr->subarray->base->type;
 		if (fdescr->subarray->base->type_num == NPY_STRING) {
-			//typestring += itoa(fdescr->subarray->base->elsize);
 			typestream << fdescr->subarray->base->elsize;
 		}
 		nel = fdescr->elsize/fdescr->subarray->base->elsize;
 
 		// Need to incref this because the PyTuple_SetItem will
-		// steal a referenc
+		// steal a reference
 		shape = fdescr->subarray->shape;
 		tupsize=3;
 	} else {
-		//typestring[0] = fdescr->byteorder;
-		//typestring[1] = fdescr->type;
 		typestream << fdescr->byteorder;
 		typestream << fdescr->type;
 		if (fdescr->type_num == NPY_STRING) {
-			//typestring += itoa(fdescr->elsize);
 			typestream << fdescr->elsize;
 		}
 		nel = 1;
@@ -1231,6 +1240,7 @@ PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* nam
 				2,
 				shape);
 		Py_XINCREF(shape);
+
 	}
 
 	if (mDebug) {
@@ -1416,53 +1426,37 @@ void Records::PyDictPrintKeys(PyObject* dict)
 
 
 // These get functions do not rely on internal data
-void Records::CopyFieldInfo(
-		PyArray_Descr* descr, 
-		vector<string>& names, 
-		vector<long long>& offsets,
-		vector<long long>& sizes,
-		vector<long long>& nel,
-		vector<long long>& typenums,
-		long long& rowsize)
+void Records::CopyFieldInfo(PyArray_Descr* descr)
 {
 	if (mDebug) DebugOut("Copying field info");
-	CopyDescrOrderedNames(descr, names);
-	CopyDescrOrderedOffsets(descr, names, offsets, sizes, nel, typenums);
-	rowsize = descr->elsize;
+	CopyDescrOrderedNames(descr);
+	CopyDescrOrderedOffsets(descr);
+	mRowSize= descr->elsize;
 }
 
-void Records::CopyDescrOrderedNames(
-		PyArray_Descr* descr, 
-		vector<string>& names)
+void Records::CopyDescrOrderedNames(PyArray_Descr* descr)
 {
 	// Get the ordered names
-	names.resize(0);
+	mNames.clear();
 
 	for (long long i=0; i<PyTuple_Size(descr->names); i++) {
 		PyObject* tmp = PyTuple_GET_ITEM(descr->names, i);
 		string tname=PyString_AS_STRING(tmp);
 		if (mDebug) {cout<<"  "<<tname<<endl;}
-		names.push_back(tname);
+		mNames.push_back(tname);
 	}
 
 }
 
-void Records::CopyDescrOrderedOffsets(
-		PyArray_Descr* descr, 
-		vector<string>& names,
-		vector<long long>& offsets,
-		vector<long long>& sizes,
-		vector<long long>& nel,
-		vector<long long>& typenums)
+void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 {
-	offsets.clear();
-	offsets.resize(names.size(), -1);
-	sizes.clear();
-	sizes.resize(names.size(), -1);
-	typenums.clear();
-	typenums.resize(names.size(), -1);
-	nel.clear();
-	nel.resize(names.size(), -1);
+
+	mOffsets.assign(mNames.size(), -1);
+	mSizes.assign(mNames.size(), -1);
+	mTypeNums.assign(mNames.size(), -1);
+	mNel.assign(mNames.size(), -1);
+    mNdim.assign(mNames.size(),-1);
+    mDims.resize(mNames.size());
 
 	// Get the offsets, ordered with names
 	PyArray_Descr *fdescr, *title;
@@ -1471,39 +1465,73 @@ void Records::CopyDescrOrderedOffsets(
 	long int offset;
 
 	if (mDebug) {cout<<"Copying ordered descr info:"<<endl;fflush(stdout);}
-	for (unsigned long long i=0; i<names.size(); i++) {
+	for (unsigned long long i=0; i<mNames.size(); i++) {
 		PyObject* item=
-			PyDict_GetItemString(descr->fields, names[i].c_str());
+			PyDict_GetItemString(descr->fields, mNames[i].c_str());
+
+
+        // default 0 dimensions
+        mNdim[i] = 0;
+        mDims[i].resize(0);
 
 		if (item!=NULL) {
 			if (!PyArg_ParseTuple(item, "Ol|O", &fdescr, &offset, &title)) {
 				if (mDebug) 
-				{cout<<"Field: "<<names[i]<<" not right format"<<endl;}
-			}
-			else {
-				offsets[i] = offset;
-				sizes[i] = fdescr->elsize;
-				typenums[i] = fdescr->type_num;
+				{cout<<"Field: "<<mNames[i]<<" not right format"<<endl;}
+			} else {
+				mOffsets[i] = offset;
+				mSizes[i] = fdescr->elsize;
+				mTypeNums[i] = fdescr->type_num;
 				if (fdescr->subarray != NULL) {
+                    //cout<<"subarray is not NULL for '"<<mNames[i]<<"'\n";
 					// Here we are implicitly only allowing subarrays
 					// if basic numbers or strings
-					nel[i] = sizes[i]/fdescr->subarray->base->elsize;
-					typenums[i] = fdescr->subarray->base->type_num;
+					mNel[i] = mSizes[i]/fdescr->subarray->base->elsize;
+					mTypeNums[i] = fdescr->subarray->base->type_num;
+
+
+                    PyObject* shape = fdescr->subarray->shape;
+                    if (PyInt_Check(shape) ) {
+                        // this happens when a single dim array shows up
+                        // with just the nel
+                        mNdim[i] = 1;
+                        mDims[i].assign(1,mNel[i]);
+                    } else if (PyTuple_Check(shape) ) {
+                        mNdim[i] = PyTuple_Size(shape);
+                        mDims[i].resize(mNdim[i]);
+                        for (int ii=0; ii<mNdim[i]; ii++) {
+                            PyObject* tmp = PyTuple_GetItem(shape, ii);
+                            mDims[i][ii] = PyInt_AsLong(tmp);
+                        }
+                    }
+
+
 				} else {
-					nel[i] = 1;
+					mNel[i] = 1;
 				}
 				if (mDebug) {
-					cout<<"  Offset("<<names[i]<<"): "<<offset<<endl;
-					cout<<"  Size("<<names[i]<<"): "<<sizes[i]<<endl;
-					cout<<"  nel("<<names[i]<<"): "<<nel[i]<<endl;
-					cout<<"  type_num("<<names[i]<<"): "<<typenums[i]<<endl;
-					cout<<"  type("<<names[i]<<"): "<<fdescr->type<<endl;
+					cout<<"  Offset("<<mNames[i]<<"): "<<mOffsets[i]<<endl;
+					cout<<"  Size("<<mNames[i]<<"): "<<mSizes[i]<<endl;
+					cout<<"  nel("<<mNames[i]<<"): "<<mNel[i]<<endl;
+					cout<<"  ndim("<<mNames[i]<<"): "<<mNdim[i]<<endl;
+                    if (mNdim[i] > 0) {
+                        cout<<"    dims: [";
+                        for (int ii=0;ii<mNdim[i];ii++) {
+                            cout<<mDims[i][ii];
+                            if (ii < mNdim[i]-1){
+                                cout<<",";
+                            }
+                        }
+                        cout<<"]\n";
+                    }
+					cout<<"  type_num("<<mNames[i]<<"): "<<mTypeNums[i]<<endl;
+					cout<<"  type("<<mNames[i]<<"): "<<fdescr->type<<endl;
 					cout<<endl;
 				}
 			}
 		} else {
 			if (mDebug) 
-			{cout<<"field: "<<names[i]<<" does not exist. offset->-1"<<endl;}
+			{cout<<"field: "<<mNames[i]<<" does not exist. offset->-1"<<endl;}
 		}
 	}
 
