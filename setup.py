@@ -63,9 +63,10 @@ class AddUPS(Command):
 
 
 description=("A class for reading and writing numpy record arrays "
-            "to and from files with fixed length records")
+             "to and from files with fixed length records")
 
 setup(name='recfile',
+      version='v0.40',
       cmdclass={"with_ups": AddUPS},
       description=description,
       url='http://code.google.com/p/recfile/',
