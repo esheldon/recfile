@@ -127,27 +127,28 @@ Examples:
     robj = recfile.Open(file, dtype=dtype)
 
     # read all rows and columns
-    data = robj.read()
     data = robj[:]
+    data = robj.read()
 
-    # read a subset of rows
-    data = robj.read(rows=row_list)
-    data = robj[ 3500:5238 ]
-
-    # get every 3rd in a slice
+    # read a subset of rows using slice notation
+    data = robj[3500:5238]
     data = robj[ 10:1234:3 ]
 
-    # send a full list
-    data = robj[ rowlist ]
+    # specifying rows explicitly
+    row_list = [35,88,217]
+    data = robj[row_list]
+    data = robj.read(rows=row_list)
+
 
     # read a subset of columns.
+    column_list = ['field2','field3']
     data = robj.read(columns=column_list)
     data = robj.read(fields=column_list)    # columns/fields are synonyms
 
     # In bracket notation, you must specify rows to read the data.
-    data = robj['fieldname'][:]
-    data = robj[ fieldlist ][ rowlist ]
-    data = robj['fieldname'].read()
+    data = robj['field2'][:]
+    data = robj[column_list][rowlist]
+    data = robj['field3'].read()
 
 
     # Read from a CSV file of the same structure, and only read a subset 
@@ -168,6 +169,8 @@ Examples:
 
     # append more rows
     r.write(second_array)
+
+    r.close()
 """
 
 _tests_docs="""
