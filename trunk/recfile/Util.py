@@ -581,11 +581,6 @@ class Recfile(object):
         return RecfileColumnSubset(self, columns=res)
 
     def read_slice(self, arg, split=False):
-        """
-        Use a memory map to read row slices. This is more powerful than
-        the simple slicer built into recfile.
-        """
-
         if self.fobj is None:
             raise ValueError("You have not yet opened a file")
 
