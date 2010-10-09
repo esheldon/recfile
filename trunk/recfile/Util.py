@@ -529,7 +529,7 @@ class Recfile(object):
             r = records.Records(self.fobj, mode='u', delim=self.delim, 
                                 bracket_arrays=self.bracket_arrays)
             dataview = data.view(numpy.ndarray) 
-            r.write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
+            r.Write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
         else:
             # Write data out as a binary chunk
             data.tofile(self.fobj)
@@ -581,10 +581,6 @@ class Recfile(object):
         return RecfileColumnSubset(self, columns=res)
 
     def read_slice(self, arg, split=False):
-        """
-        Use a memory map to read row slices. This is more powerful than
-        the simple slicer built into recfile.
-        """
 
         if self.fobj is None:
             raise ValueError("You have not yet opened a file")
