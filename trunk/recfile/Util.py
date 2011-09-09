@@ -204,16 +204,16 @@ Classes
     This class addresses limitations of memmap class, which cannot 
     read individual columns from a file without reading the whole file.
 
-{instantiate_docs}
-{input_docs}
-{useful_methods_docs}
-{examples_docs}
-{tests_docs}
-""".format(instantiate_docs=_instantiate_docs,
-           input_docs=_open_input_docs,
-           useful_methods_docs=_useful_methods_docs,
-           examples_docs=_examples_docs,
-           tests_docs=_tests_docs)
+%s
+%s
+%s
+%s
+%s
+""" % (_instantiate_docs,
+       _open_input_docs,
+       _useful_methods_docs,
+       _examples_docs,
+       _tests_docs)
 
 def Open(fileobj, 
          mode="r", 
@@ -237,14 +237,14 @@ def Open(fileobj,
                    verbose=verbose)
 
 Open.__doc__="""
-{instantiate_docs}
-{input_docs}
-{useful_methods_docs}
-{examples_docs}
-""".format(instantiate_docs=_instantiate_docs,
-           input_docs=_open_input_docs,
-           useful_methods_docs=_useful_methods_docs,
-           examples_docs=_examples_docs)
+%s
+%s
+%s
+%s
+""" % (_instantiate_docs,
+       _open_input_docs,
+       _useful_methods_docs,
+       _examples_docs)
 
 
 
@@ -265,6 +265,11 @@ class Recfile(object):
                   padnull=padnull, ignorenull=ignorenull, 
                   bracket_arrays=bracket_arrays,
                   verbose=verbose)
+
+    def __enter__(self):
+        return self
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.close()
 
     def open(self, 
              fobj, 
@@ -304,8 +309,12 @@ class Recfile(object):
 
         if self.skiplines is None:
             self.skiplines = 0
+
         if self.offset is None:
-            self.offset = 0
+            if isinstance(fobj,file):
+                self.offset = fobj.tell()
+            else:
+                self.offset = 0
 
         if self.delim is not None and self.delim != "":
             self.is_ascii = True
@@ -368,6 +377,7 @@ class Recfile(object):
                 self.offset=0
             # go to the offset position in the file
             if self.fobj.tell() != self.offset:
+                print 'moving'
                 self.fobj.seek(offset)
 
 
@@ -437,7 +447,7 @@ class Recfile(object):
 
 
     def read(self, rows=None, fields=None, columns=None,
-             view=None, split=False):
+             view=None, split=False, **keys):
         """
         Class:
             Recfile
