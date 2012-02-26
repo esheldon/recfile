@@ -541,7 +541,7 @@ class Recfile(object):
 
         # read subset of rows *and* columns.
         data = sf['fieldname'][3:58]
-        data = sf[rowlist][fieldlist]
+        data = sf[fieldlist][rowlist]
 
         # Note, if you send just columns, a RecfileColumnSubset object is
         # returned
