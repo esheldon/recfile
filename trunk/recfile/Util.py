@@ -682,7 +682,7 @@ class Recfile(object):
                 raise IndexError("Index out of bounds")
 
         if stop < 0:
-            stop = self.nrows + start + 1
+            stop = self.nrows + stop
 
         if stop < start:
             # will return an empty struct
