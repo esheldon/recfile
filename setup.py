@@ -2,6 +2,7 @@ from distutils.core import setup, Extension, Command
 import numpy
 import os
 import sys
+import shutil
 
 import distutils.sysconfig
 
@@ -14,6 +15,21 @@ module1 = Extension('recfile._records', sources=sources)
 
 data_files=[]
 
+version_dir='python%d' % sys.version_info.major
+files2copy=[
+    {'from':os.path.join('recfile',version_dir,'records.py'),
+     'to':os.path.join('recfile','records.py')},
+    {'from':os.path.join('recfile',version_dir,'records_wrap.cpp'),
+     'to':os.path.join('recfile','records_wrap.cpp')},
+]
+
+for f in files2copy:
+    if os.path.exists(f['to']):
+        print("removing:",f['to'])
+        os.remove(f['to'])
+
+    print("copying",f['from'],"to",f['to'])
+    shutil.copy(f['from'], f['to'])
 
 class AddUPS(Command):
     _data_files = data_files

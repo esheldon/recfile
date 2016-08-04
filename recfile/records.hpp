@@ -89,11 +89,12 @@ Modification history:
     Created: 2008-07-18, Erin Sheldon
 ");
 #endif
-		Records(PyObject* fileobj, 
+		Records(const char* filename, 
 				const char* mode, // mode won't be used if file is object
 				PyObject* delim=NULL, 
 				PyObject* dtype=NULL,
 				long long nrows=-9999,
+                long offset=0,
                 int bracket_arrays=0) throw (const char *);
 
         ~Records();
@@ -173,6 +174,7 @@ Modification history:
 				bool padnull=false,
 				bool ignorenull=false) throw (const char *);
 
+
 #ifdef SWIG
 %feature("docstring",
 		"
@@ -183,10 +185,16 @@ Modification history:
 #endif
 		void Close() throw (const char*);
 
+        PyObject* write_string(PyObject* obj) throw (const char* );
+        PyObject* update_row_count(long nrows) throw (const char* );
 
     private:
 		// Move this to public when needed for testing
         PyObject* Test();
+
+        void ensure_writable(void) throw (const char* );
+        void ensure_readable(void) throw (const char* );
+
 
 		// Initialize member variables
 		void InitializeVariables();
@@ -263,7 +271,7 @@ Modification history:
 		PyObject* Object2IntpArray(PyObject* obj);
 
 		// Get the file pointer or open the file if it is a string.  
-		void GetFptr(PyObject* file_obj, const char* mode);
+		void GetFptr(const char* filename, const char* mode);
 
 
 		// Set the file type based on the delimeter
@@ -314,7 +322,6 @@ Modification history:
 
 
 		FILE* mFptr;                                           //---
-		bool mFptrIsLocal;                                     //---
 
 		// Delimiter for ascii files
 		string mDelim;
@@ -362,12 +369,14 @@ Modification history:
         npy_intp mNrows;             // Total number of rows in file
         npy_intp mNrowsToRead;       // Number of rows we are actually reading.
 
+        long mOffset;             // Total number of rows in file
+
 		int mFileType;
 		int mAction;
 
 		// Action codes
-		static const int READ = 0;
-		static const int WRITE = 1;
+		static const int READ = 1;
+		static const int WRITE = 2;
 
 		// File types
 		static const int BINARY_FILE = 0;
@@ -375,8 +384,8 @@ Modification history:
 
         int mBracketArrays;
 
-		static const bool mDebug=false;
-		//static const bool mDebug=true;
+		//static const bool mDebug=false;
+		static const bool mDebug=true;
 };
 
 // Should only be executed once

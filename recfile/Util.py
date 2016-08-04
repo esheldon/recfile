@@ -1,9 +1,11 @@
+from __future__ import print_function
 import numpy
-import records
 import sys
 import os
 import math
 import pprint
+
+from . import records
 
 # These are a bunch of docs pieces that can be pieced together
 
@@ -27,7 +29,6 @@ Instantiate a new Recfile class
                          dtype=None, 
                          nrows=-9999, 
                          offset=0, 
-                         skiplines=0,
                          verbose=False)
 """
 # docs for inputs to the varius "open" functions and methods.
@@ -55,10 +56,6 @@ Keywords:
     offset:  Offset into the file where reading will begin.  Used
         if opening with "r" or "r+".  For "w" or "w+" offset is
         zero by definition.
-
-    skiplines:
-        Skip the specified number of lines (rows).  Only works for
-        ascii where rows are separated by '\\n'
 
     padnull: When writing ascii, replace nulls in strings with spaces.
         Useful for programs that don't understand nulls like sqlite
@@ -215,6 +212,31 @@ Classes
        _examples_docs,
        _tests_docs)
 
+
+def write(filename, data, mode='w', **keys):
+    """
+    write data into a records file
+
+    For more information about keywords, see docs for recfile.Recfile
+    """
+
+    if mode not in ['w','w+','r+']:
+        raise ValueError("to write, mode must be one of w, w+, r+")
+    with Recfile(filename, mode=mode, **keys) as robj:
+        robj.write(data)
+
+def read(filename, dtype, **keys):
+    """
+    read data from a recfile
+
+    For more information about keywords, see docs for recfile.Recfile
+    """
+
+    with Recfile(filename, dtype=dtype, mode='r', **keys) as robj:
+        data=robj.read(data, **keys)
+
+    return data
+
 def Open(fileobj, mode='r', **keys):
     # doc string generated dynamically below
 
@@ -231,24 +253,18 @@ Open.__doc__="""
        _useful_methods_docs,
        _examples_docs)
 
-
-
 class Recfile(object):
     __doc__=Open.__doc__
 
-    def __init__(self, fobj, mode='r', **keys):
-        # aliases
-        self.Read = self.read
-        self.Write = self.write
-
-        self.open(fobj, mode=mode, **keys)
+    def __init__(self, filename, mode='r', **keys):
+        self.open(filename, mode=mode, **keys)
 
     def __enter__(self):
         return self
     def __exit__(self, exception_type, exception_value, traceback):
         self.close()
 
-    def open(self, fobj, mode='r', **keys):
+    def open(self, filename, mode='r', **keys):
         """
         Class:
             Recfile
@@ -262,64 +278,58 @@ class Recfile(object):
             which has identical syntax to this open() method.
         """
 
+        self.close()
+
+        self.mode=mode
+
         dtype=keys.get('dtype',None)
         nrows=keys.get('nrows',-9999)
 
         self.verbose=keys.get('verbose',False)
-
         self.bracket_arrays=keys.get('bracket_arrays',False)
 
-        self.close()
         self.padnull=keys.get('padnull',False)
         self.ignorenull=keys.get('ignorenull',False)
+
         self.delim = keys.get('delim',None)
         self.skiplines=keys.get('skiplines',None)
         self.offset=keys.get('offset',None)
 
-        if self.skiplines is None:
-            self.skiplines = 0
+        if self.skiplines is not None:
+            raise RuntimeError("skiplines is no longer supported")
 
-        if self.offset is None:
-            if isinstance(fobj,file):
-                self.offset = fobj.tell()
-            else:
-                self.offset = 0
+        if self.offset in [None,""]:
+            self.offset=0
+        else:
+            self.offset=int(self.offset)
+            if self.offset < 0:
+                self.offset=0
 
-        if self.delim is not None and self.delim != "":
+        if self.delim == "":
+            self.delim=None
+
+        if self.delim is not None:
             self.is_ascii = True
         else:
             self.is_ascii = False
 
-        if fobj is None:
-            return
+        # expand shortcut variables
+        filename = os.path.expanduser(filename)
+        self.filename = os.path.expandvars(filename)
 
-        if isstring(fobj):
-            # expand shortcut variables
-            fpath = os.path.expanduser(fobj)
-            fpath = os.path.expandvars(fpath)
+        if self.verbose:
+            stdout.write("\nOpening file: %s\n" % filename)
 
-            if self.verbose:
-                stdout.write("\nOpening file: %s\n" % fpath)
+        if self.mode not in ['r','r+','w','w+']:
+            raise ValueError("bad mode: '%s'" % self.mode)
 
-            if mode == 'r+' and not os.path.exists(fobj):
-                # path doesn't exist but we want to append.  Change the
-                # mode to w+
-                if self.verbose:
-                    stdout.write("Requested append on non-existent file: "
-                                 "Will create a new file\n")
-                mode = 'w+'
+        if self.mode == 'r+' and not os.path.exists(filename):
+            raise RuntimeError("opened with 'r+' but file does not exist")
 
-            self.fobj = open(fpath, mode)
-
-        elif isinstance(fobj, file):
-            self.fobj = fobj
-        else:
-            raise ValueError("Only support filenames and file objects "
-                             "as input")
-
-        if self.fobj.mode[0] == 'r':
+        if self.mode[0] == 'r':
             if dtype is None:
                 raise ValueError("You must enter dtype when reading")
+
             self.dtype = numpy.dtype(dtype)
 
             if nrows is None or nrows < 0:
@@ -327,47 +337,42 @@ class Recfile(object):
             else:
                 self.nrows=nrows
 
-            # we only pay attention to the offset when mode is 'r' or 'r+'
-            
-            if self.is_ascii:
-                # for ascii we can skip lines, e.g. for a header
-                # this takes precedence over offset
-                if self.skiplines > 0:
-                    self.nrows -= self.skiplines
-                    for i in xrange(self.skiplines):
-                        tmp = self.fobj.readline()
-
-                    # now, we override any existing offset to our
-                    # position after skipping lines
-                    self.offset = self.fobj.tell()
-
-
-            if self.offset < 0:
-                self.offset=0
-            # go to the offset position in the file
-            if self.fobj.tell() != self.offset:
-                print 'moving'
-                self.fobj.seek(offset)
-
-
-        
-    def get_nrows(self):
-        if self.delim != "" and self.delim is not None:
-            # for ascii this can be slow
-            nrows = 0
-            for line in self.fobj:
-                nrows += 1
-            self.fobj.seek(self.offset)
+            self.robj = records.Records(
+                self.filename,
+                mode=self.mode,
+                delim=self.delim,
+                dtype=self.dtype,
+                nrows=self.nrows,
+                offset=self.offset,
+            )
         else:
-            # For binary, try to figure out the number of rows based on
-            # the number of bytes
+            self.robj = records.Records(
+                filename,
+                mode=self.mode,
+                delim=self.delim,
+                bracket_arrays=self.bracket_arrays,
+            )
 
-            rowsize=self.dtype.itemsize
-            # go to end
-            self.fobj.seek(0,2)
-            datasize = self.fobj.tell() - self.offset
-            nrows = datasize/rowsize
-            self.fobj.seek(self.offset)
+    def get_nrows(self):
+
+        with open(self.filename) as fobj:
+            if self.offset > 0:
+                fobj.seek(self.offset)
+
+            if self.delim is not None:
+                # for ascii this can be slow
+                nrows = 0
+                for line in fobj:
+                    nrows += 1
+            else:
+                # For binary, try to figure out the number of rows based on
+                # the number of bytes
+
+                rowsize=self.dtype.itemsize
+                # go to end
+                fobj.seek(0,2)
+                datasize = fobj.tell() - self.offset
+                nrows = datasize/rowsize
 
         return nrows
 
@@ -380,27 +385,20 @@ class Recfile(object):
         self.delim=None
         self.nrows=0
         self.dtype=None
-        if hasattr(self, 'fobj'):
-            if self.fobj is not None:
-                if isinstance(self.fobj, file):
-                    self.fobj.close()
-        self.fobj=None
+        if hasattr(self, 'robj'):
+            if self.robj is not None:
+                self.robj.Close()
+        self.robj=None
 
         self.padnull=False
         self.ignorenull=False
 
 
-    def flush(self):
-        if hasattr(self,'fobj'):
-            if isinstance(self.fobj, file):
-                self.fobj.flush()
-
     def __repr__(self):
         s = []
 
-        if isinstance(self.fobj,file):
-            s += ["filename: '%s'" % self.fobj.name]
-            s += ["mode: '%s'" % self.fobj.mode]
+        s += ["filename: '%s'" % self.filename]
+        s += ["mode: '%s'" % self.mode]
         if self.delim is not None:
             s=["delim: '%s'" % self.delim]
 
@@ -451,24 +449,13 @@ class Recfile(object):
                 x,y,index = r.read(split=True)
         """
         
-        if self.fobj is None:
+        if self.robj is None:
             raise ValueError("You have not yet opened a file")
-
-        if self.fobj.tell() != self.offset:
-            self.fobj.seek(self.offset)
 
         rows2read = self._get_rows2read(rows)
         fields2read = self._get_fields2read(fields, columns=columns)
 
-        if fields2read is None and rows2read is None and self.delim is None:
-            # Its binary and we are reading everything.  Use fromfile.
-            result = numpy.fromfile(self.fobj,dtype=self.dtype,count=self.nrows)
-        else:
-            robj = records.Records(
-                self.fobj, mode='r', 
-                nrows=self.nrows, dtype=self.dtype, 
-                delim=self.delim)
-            result = robj.Read(rows=rows2read, fields=fields2read)
+        result = self.robj.Read(rows=rows2read, fields=fields2read)
 
         if view is not None:
             result = result.view(view)
@@ -477,6 +464,8 @@ class Recfile(object):
             return split_fields(result)
         else:
             return result
+
+    Read=read
 
     def write(self, data):
         """
@@ -492,34 +481,24 @@ class Recfile(object):
             r.write(array1)
             r.write(array2)
         """
-        if self.fobj is None:
+        if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
-        if self.fobj.mode[0] != 'w' and '+' not in self.fobj.mode:
-            raise ValueError("You must open with 'w*' or 'r+' to write")
-
-        self.fobj.seek(0,2) # Seek to end of file
 
         dataview = data.view(numpy.ndarray) 
         if self.verbose:
             stdout.write("Writing %s: %s\n" % \
                 (dataview.size,pprint.pformat(dataview.dtype.descr)))
 
-        if (self.delim is not None):
-            # let recfile deal with ascii writing
-            r = records.Records(self.fobj, mode='u', delim=self.delim, 
-                                bracket_arrays=self.bracket_arrays)
-            # make sure the data are in native format.  This greatly 
-            # simplifies the C code
-            to_native_inplace(dataview)
-            r.Write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
-        else:
-            # Write data out as a binary chunk
-            dataview.tofile(self.fobj)
+        # make sure the data are in native format.  This greatly 
+        # simplifies the C code
+        to_native_inplace(dataview)
+        self.robj.Write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
 
         # update nrows to reflect the write
         self.nrows += dataview.size
 
+    Write=write
 
     def __getitem__(self, arg):
         """
@@ -549,7 +528,7 @@ class Recfile(object):
         data = sub.read(rows=)
         """
 
-        if self.fobj is None:
+        if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
         res, isrows, isslice = self.process_args_as_rows_or_columns(arg)
@@ -565,17 +544,14 @@ class Recfile(object):
 
     def read_slice(self, arg, split=False):
 
-        if self.fobj is None:
+        if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
-        if self.fobj.tell() != self.offset:
-            self.fobj.seek(self.offset)
-
-        robj = records.Records(
-                self.fobj, mode='r', 
-                nrows=self.nrows, dtype=self.dtype, 
-                delim=self.delim)
-        result = robj.ReadSlice(long(arg.start), long(arg.stop), long(arg.step))
+        result = self.robj.ReadSlice(
+            long(arg.start),
+            long(arg.stop),
+            long(arg.step),
+        )
 
 
         if split:
@@ -586,25 +562,7 @@ class Recfile(object):
         return result
 
     def get_memmap(self, view=None, header=False):
-
-        if self.delim is not None:
-            raise ValueError("Cannot memory map ascii files")
-
-        if self.fobj.tell() != self.offset:
-            self.fobj.seek(self.offset)
-
-
-        shape = (self.nrows,)
-
-        result = numpy.memmap(self.fobj, dtype=self.dtype, shape=shape, 
-                              mode=self.fobj.mode, offset=self.fobj.tell())
-        if view is not None:
-            result = result.view(view)
-
-        return result
-
-
-
+        raise RuntimeError("memmap is no longer supported")
 
     def __len__(self):
         return self.nrows

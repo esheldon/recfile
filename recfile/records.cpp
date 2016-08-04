@@ -1,32 +1,145 @@
 #include "records.hpp"
 
-Records::Records(PyObject* fileobj, 
+/*
+   we need this because someone made the import_array macro return a value
+   in python 3
+
+   first lesson of C macros:  do not make them use the return statment
+*/
+
+#if PY_MAJOR_VERSION >= 3
+static int *init_numpy(void) {
+#else
+static void init_numpy(void) {
+#endif
+	import_array();
+}
+
+// check unicode for python3, string for python2
+static int is_python_string(const PyObject* obj)
+{
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_Check(obj) || PyBytes_Check(obj);
+#else
+    return PyUnicode_Check(obj) || PyString_Check(obj);
+#endif
+}
+
+// unicode is common to python 2 and 3
+static char* get_unicode_as_string(PyObject* obj)
+{
+    PyObject* tmp=NULL;
+    char* strdata=NULL;
+    tmp = PyObject_CallMethod(obj,"encode",NULL);
+
+    strdata = strdup( PyBytes_AsString(tmp) );
+    Py_XDECREF(tmp);
+
+    return strdata;
+}
+
+
+static string get_object_as_string(PyObject* obj)
+{
+    PyObject* format=NULL;
+    PyObject* args=NULL;
+    string strdata;
+    PyObject* tmpobj1=NULL;
+
+    if (PyUnicode_Check(obj)) {
+
+        strdata=get_unicode_as_string(obj);
+
+    } else {
+
+#if PY_MAJOR_VERSION >= 3
+
+        if (PyBytes_Check(obj)) {
+            strdata = PyBytes_AsString(obj);
+        } else {
+            PyObject* tmpobj2=NULL;
+            format = Py_BuildValue("s","%s");
+            // this is not a string object
+            args=PyTuple_New(1);
+
+            PyTuple_SetItem(args,0,obj);
+            tmpobj2 = PyUnicode_Format(format, args);
+            tmpobj1 = PyObject_CallMethod(tmpobj2,"encode",NULL);
+
+            Py_XDECREF(args);
+            Py_XDECREF(tmpobj2);
+
+            strdata = PyBytes_AsString(tmpobj1);
+            Py_XDECREF(tmpobj1);
+            Py_XDECREF(format);
+        }
+
+#else
+        // convert to a string as needed
+        if (PyString_Check(obj)) {
+            strdata = PyString_AsString(obj);
+        } else {
+            format = Py_BuildValue("s","%s");
+            args=PyTuple_New(1);
+
+            PyTuple_SetItem(args,0,obj);
+            tmpobj1= PyString_Format(format, args);
+
+            strdata = PyString_AsString(tmpobj1);
+            Py_XDECREF(args);
+            Py_XDECREF(tmpobj1);
+            Py_XDECREF(format);
+        }
+#endif
+    }
+
+    return strdata;
+}
+
+
+
+Records::Records(
+        const char *filename,
 		const char* mode,
 		PyObject* delimobj, 
 		PyObject* dtype,
 		long long nrows,
+        long offset,
         int bracket_arrays) throw (const char *)
 {
-	import_array();
+    init_numpy();
+
 	InitializeVariables();
 
     mBracketArrays = bracket_arrays;
 
 	mMode=mode;
-	GetFptr(fileobj, mMode.c_str());
+
+	GetFptr(filename, mMode.c_str());
 	ProcessDelim(delimobj);
 	SetFileType();
 
-	if (mMode[0] == 'r') {
+    mOffset = offset;
+
+	if (mMode[0] == 'r' || mMode == "w+") {
 		if ( (dtype == NULL) || (nrows==-9999) ) {
 			throw "You must send the datatype and number of rows when reading";
 		}
 		// Open for reading
 		mAction=READ;
+        if (mMode[0]=='w') {
+            // both write and read
+            mAction |= WRITE;
+        }
+
+        if (offset > 0) {
+            fseek(mFptr, offset, SEEK_SET);
+        }
+
 		ProcessDescr(dtype);
 		ProcessNrows(nrows);
 	} else {
-		// Open for writing
+		// Only opened for writing
 		mAction=WRITE;
 	}
 
@@ -52,7 +165,7 @@ Records::~Records()
 
 void Records::Close() throw (const char*)
 {
-	if (mFptrIsLocal && mFptr != NULL) {
+	if (mFptr != NULL) {
 		if (mDebug) DebugOut("Closing file");
 		fclose(mFptr);
 		mFptr=NULL;
@@ -79,7 +192,6 @@ void Records::InitializeVariables()
 	mData=NULL;
 
 	mFptr=NULL;
-	mFptrIsLocal=false;
 
 	mDelim="";
     mArrayDelim="";
@@ -108,12 +220,11 @@ void Records::InitializeVariables()
 
 PyObject* Records::ReadSlice(long long row1, long long row2, long long step)  throw (const char* )
 {
-	if (mFptr == NULL) {
-		throw "File is not open";
-	}
-	if (mAction != READ) {
-		throw "File is not open for reading";
-	}
+    ensure_readable();
+
+    // always start at the users requested offset
+    fseek(mFptr, mOffset, SEEK_SET);
+
 
 	// juse some error checking and return implied length
 	mNrowsToRead = ProcessSlice(row1, row2, step);
@@ -138,12 +249,9 @@ PyObject* Records::Read(
 		PyObject* rows,
 		PyObject* fields) throw (const char* )
 {
-	if (mFptr == NULL) {
-		throw "File is not open";
-	}
-	if (mAction != READ) {
-		throw "File is not open for reading";
-	}
+    ensure_readable();
+
+    fseek(mFptr, mOffset, SEEK_SET);
 
 	ProcessRowsToRead(rows);
 	ProcessFieldsToRead(fields);
@@ -583,17 +691,71 @@ void Records::CreateOutputArray()
 	mData = mReturnObject->data;
 }
 
+void Records::ensure_writable(void) throw (const char* )
+{
+	if (mFptr == NULL) {
+		throw "File is not open";
+	}
+	if ( (mAction & WRITE) == 0) {
+		throw "File is not open for writing";
+	}
+}
+void Records::ensure_readable(void) throw (const char* )
+{
+	if (mFptr == NULL) {
+		throw "File is not open";
+	}
+	if ( (mAction & READ) == 0) {
+		throw "File is not open for reading";
+	}
+}
+
+
+/*
+   simply write the data at the current location, it is up the user to make
+   sure this makes sense, e.g. that the file is empty if they are writing
+   a header
+*/
+
+PyObject* Records::write_string(PyObject* obj) throw (const char* )
+{
+    ensure_writable();
+
+    string header = get_object_as_string(obj);
+    fprintf(mFptr, "%s", header.c_str());
+
+    Py_RETURN_NONE;
+}
+
+/*
+
+   special function to help SFile to update the header row count
+
+*/
+PyObject* Records::update_row_count(long nrows) throw (const char* )
+{
+    ensure_writable();
+
+    rewind(mFptr);
+    fprintf(mFptr, "%20ld\n", nrows);
+
+    fseek(mFptr, 0, SEEK_END);
+
+    Py_RETURN_NONE;
+}
+
+
+
+
 PyObject* Records::Write(
 		PyObject* obj, 
 		bool padnull,
 		bool ignorenull) throw (const char* )
 {
-	if (mFptr == NULL) {
-		throw "File is not open";
-	}
-	if (mAction != WRITE) {
-		throw "File is not open for writing";
-	}
+    ensure_writable();
+
+    // always write from the end
+    fseek(mFptr, 0, SEEK_END);
 
 	PyObject* ret=Py_None;
 	Py_INCREF(Py_None);
@@ -1005,32 +1167,18 @@ void Records::ProcessDescr(PyObject* descr)
 }
 
 
-void Records::GetFptr(PyObject* file_obj, const char* mode)
+void Records::GetFptr(const char *filename, const char* mode)
 {
 	if (mDebug) DebugOut("Getting fptr");
 
-	// The file_obj is a string
-	if (PyString_Check(file_obj)) {
+    string fstr=filename;
+    mFptr = fopen(fstr.c_str(), mode);
+    if (mFptr==NULL) {
+        string err="Could not open file: "+fstr;
+        throw err.c_str();
+    }
+    return;
 
-		string fstr=PyString_AsString(file_obj);
-		mFptr = fopen(fstr.c_str(), mode);
-		if (mFptr==NULL) {
-			string err="Could not open file: "+fstr;
-			throw err.c_str();
-		}
-		mFptrIsLocal=true;
-		return;
-	} else if (PyFile_Check(file_obj)) {
-
-		mFptr = PyFile_AsFile(file_obj);
-		if (mFptr==NULL) {
-			throw "File object is invalid";
-		}
-		mFptrIsLocal=false;
-		return;
-	} else {
-		throw "Input must be a file object or a string";
-	}
 }
 
 void Records::ProcessDelim(PyObject* delim_obj)
@@ -1039,8 +1187,8 @@ void Records::ProcessDelim(PyObject* delim_obj)
 		mDelim="";
         mArrayDelim="";
 	} else {
-		if (PyString_Check(delim_obj)) {
-			mDelim = PyString_AsString(delim_obj);
+		if (is_python_string(delim_obj)) {
+			mDelim = get_object_as_string(delim_obj);
 
             if (mBracketArrays) {
                 mArrayDelim = ",";
@@ -1096,7 +1244,7 @@ void Records::SubDtype(
 	// First deal with a scalar string or list input
 	if (PyList_Check(subnamesobj)) {
 		ListStringMatch(mNames, subnamesobj, matchids);
-	} else if (PyString_Check(subnamesobj)) {
+	} else if (is_python_string(subnamesobj)) {
 		// Must decref
 		PyObject* tmplist = PyList_New(0);
 		// Makes a copy on append.
@@ -1228,11 +1376,21 @@ PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* nam
 	PyTuple_SetItem(
 			tup,
 			0,
-			PyString_FromString(name) );
+#if PY_MAJOR_VERSION >= 3
+			PyBytes_FromString(name)
+#else
+			PyString_FromString(name)
+#endif
+    );
 	PyTuple_SetItem(
 			tup,
 			1,
-			PyString_FromString(typestring.c_str()) );
+#if PY_MAJOR_VERSION >= 3
+			PyBytes_FromString(typestring.c_str())
+#else
+			PyString_FromString(typestring.c_str())
+#endif
+    );
 
 	if (tupsize == 3) {
 		PyTuple_SetItem(
@@ -1246,9 +1404,9 @@ PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* nam
 	if (mDebug) {
 		cout<<"("
 			<<"'"
-			<<PyString_AsString(PyTuple_GetItem(tup,0))<<"'"
+			<<get_object_as_string(PyTuple_GetItem(tup,0))<<"'"
 			<<", '"
-			<<PyString_AsString(PyTuple_GetItem(tup,1))<<"'";
+			<<get_object_as_string(PyTuple_GetItem(tup,1))<<"'";
 		if (nel > 1) {
 			cout <<", "<<nel;
 		}
@@ -1316,11 +1474,11 @@ void Records::ListStringMatch(
 		vector<string> goodones;
 		for (long long i=0; i<len; i++) {
 			PyObject* item = PySequence_GetItem(list, i);
-			if (!PyString_Check(item)) {
+			if (!is_python_string(item)) {
 				cout<<"fields["<<i<<"] is not a string; skipping"<<endl;
 				fflush(stdout);
 			} else {
-				string ts = PyString_AsString(item);
+				string ts = get_object_as_string(item);
 				goodones.push_back(ts);
 			}
 		}
@@ -1416,7 +1574,7 @@ void Records::PyDictPrintKeys(PyObject* dict)
 	long long len=SequenceCheck(keys);
 	for (long long i=0; i<len; i++) {
 		PyObject* item = PyList_GetItem(keys, i);
-		cout<<"key["<<i<<"] = "<<PyString_AsString(item)<<endl;
+		cout<<"key["<<i<<"] = "<<get_object_as_string(item)<<endl;
 		Py_XDECREF(item);
 	}
 
@@ -1429,7 +1587,9 @@ void Records::PyDictPrintKeys(PyObject* dict)
 void Records::CopyFieldInfo(PyArray_Descr* descr)
 {
 	if (mDebug) DebugOut("Copying field info");
+	if (mDebug) DebugOut("Copying ordered names");
 	CopyDescrOrderedNames(descr);
+	if (mDebug) DebugOut("Copying offsets");
 	CopyDescrOrderedOffsets(descr);
 	mRowSize= descr->elsize;
 }
@@ -1440,8 +1600,9 @@ void Records::CopyDescrOrderedNames(PyArray_Descr* descr)
 	mNames.clear();
 
 	for (long long i=0; i<PyTuple_Size(descr->names); i++) {
+
 		PyObject* tmp = PyTuple_GET_ITEM(descr->names, i);
-		string tname=PyString_AS_STRING(tmp);
+		string tname=get_object_as_string(tmp);
 		if (mDebug) {cout<<"  "<<tname<<endl;}
 		mNames.push_back(tname);
 	}
@@ -1491,7 +1652,11 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 
 
                     PyObject* shape = fdescr->subarray->shape;
+#if PY_MAJOR_VERSION >= 3
+                    if (PyLong_Check(shape) ) {
+#else
                     if (PyInt_Check(shape) ) {
+#endif
                         // this happens when a single dim array shows up
                         // with just the nel
                         mNdim[i] = 1;
@@ -1501,7 +1666,11 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
                         mDims[i].resize(mNdim[i]);
                         for (int ii=0; ii<mNdim[i]; ii++) {
                             PyObject* tmp = PyTuple_GetItem(shape, ii);
+#if PY_MAJOR_VERSION >= 3
+                            mDims[i][ii] = PyLong_AsLong(tmp);
+#else
                             mDims[i][ii] = PyInt_AsLong(tmp);
+#endif
                         }
                     }
 
