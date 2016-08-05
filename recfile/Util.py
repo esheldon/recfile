@@ -233,7 +233,7 @@ def read(filename, dtype, **keys):
     """
 
     with Recfile(filename, dtype=dtype, mode='r', **keys) as robj:
-        data=robj.read(data, **keys)
+        data=robj.read(**keys)
 
     return data
 
@@ -331,11 +331,12 @@ class Recfile(object):
                 raise ValueError("You must enter dtype when reading")
 
             self.dtype = numpy.dtype(dtype)
+            self.colnames = numpy.array(self.dtype.names)
 
             if nrows is None or nrows < 0:
                 self.nrows = self.get_nrows()
             else:
-                self.nrows=nrows
+                self.nrows=int(nrows)
 
             self.robj = records.Records(
                 self.filename,
@@ -372,7 +373,7 @@ class Recfile(object):
                 # go to end
                 fobj.seek(0,2)
                 datasize = fobj.tell() - self.offset
-                nrows = datasize/rowsize
+                nrows = datasize//rowsize
 
         return nrows
 
@@ -412,6 +413,27 @@ class Recfile(object):
         s = "\n".join(s)
         return s
 
+
+    def get_colnum(self, colname):
+        w,=numpy.where(self.colnames == colname)
+        if w.size == 0:
+            raise ValueError("column '%s' not found" % colname)
+        return w[0]
+
+    def read_column(self, colname):
+        if self.robj is None:
+            raise ValueError("You have not yet opened a file")
+
+        colnum=self.get_colnum(colname)
+
+        dtype=[ self.dtype.descr[colnum] ]
+        tdata=numpy.zeros(self.nrows, dtype=dtype)
+        # we don't want the field name in here
+        data=tdata[colname]
+
+        self.robj.read_column(data,int(colnum))
+
+        return data
 
     def read(self, rows=None, fields=None, columns=None,
              view=None, split=False, **keys):
@@ -548,9 +570,9 @@ class Recfile(object):
             raise ValueError("You have not yet opened a file")
 
         result = self.robj.ReadSlice(
-            long(arg.start),
-            long(arg.stop),
-            long(arg.step),
+            int(arg.start),
+            int(arg.stop),
+            int(arg.step),
         )
 
 
@@ -909,7 +931,7 @@ class RecfileColumnSubset(object):
 
     Useful because subsets can be passed around to functions, or chained
     with a row selection.
-    
+
     This class is returned when using [ ] notation to specify fields in the
     recfile class
 
@@ -941,7 +963,7 @@ class RecfileColumnSubset(object):
         Read the data from disk and return as a numpy array
         """
 
-        return self.recfile.read(rows=rows, columns=self.columns, 
+        return self.recfile.read(rows=rows, columns=self.columns,
                                  view=view, split=split)
 
     def __getitem__(self, arg):

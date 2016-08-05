@@ -119,7 +119,7 @@ Records::Records(
 	ProcessDelim(delimobj);
 	SetFileType();
 
-    mOffset = offset;
+    mFileOffset = offset;
 
 	if (mMode[0] == 'r' || mMode == "w+") {
 		if ( (dtype == NULL) || (nrows==-9999) ) {
@@ -223,7 +223,7 @@ PyObject* Records::ReadSlice(long long row1, long long row2, long long step)  th
     ensure_readable();
 
     // always start at the users requested offset
-    fseek(mFptr, mOffset, SEEK_SET);
+    fseek(mFptr, mFileOffset, SEEK_SET);
 
 
 	// juse some error checking and return implied length
@@ -251,7 +251,7 @@ PyObject* Records::Read(
 {
     ensure_readable();
 
-    fseek(mFptr, mOffset, SEEK_SET);
+    fseek(mFptr, mFileOffset, SEEK_SET);
 
 	ProcessRowsToRead(rows);
 	ProcessFieldsToRead(fields);
@@ -264,9 +264,175 @@ PyObject* Records::Read(
 }
 
 
+// read all the elements of a field
+void Records::scan_column_values(long long fnum, char* input_buff)
+{
+
+    int skipping=false;
+    string tmp;
+
+    char *buff=NULL;
+
+    if (input_buff) {
+        skipping=false;
+        buff=input_buff;
+
+    } else {
+        skipping=true;
+
+        // a buffer big enough for one scan
+
+        long buffsize = mSizes[fnum]/mNel[fnum] + 1;
+        tmp.resize(buffsize,'\0');
+        buff = &tmp[0];
+
+    }
+
+	int type_num = mTypeNums[fnum];
+
+	for (long long el=0; el<mNel[fnum]; el++) {
+		int ret = fscanf(mFptr, mScanFormats[type_num].c_str(), buff);
+		if (ret != 1) {
+			string err="ScanVal: Error reading field: "+mNames[fnum];
+			if (feof(mFptr)) {
+				err += ": EOF reached unexpectedly";
+			}
+			else {
+				err = + ": Read error";
+			}
+			throw err.c_str();
+		}
+        if (!skipping) {
+            buff += mSizes[fnum]/mNel[fnum] ;
+        }
+	}
+}
+
+
+void Records::read_ascii_bytes(long long colnum, char* buff)
+{
+
+    int skipping=false;
+	char c;
+
+    if (!buff) {
+        skipping=true;
+    }
+
+	// Read the expected number of bytes *per element* as opposed to binary
+	int size_per_el = mSizes[colnum]/mNel[colnum];
+
+	// Loop over each element for ascii. Must do this because
+	// of the delimters
+	for (long long el=0; el<mNel[colnum]; el++) {
+
+		for (long long i=0; i<size_per_el; i++) {
+			c=fgetc(mFptr);
+			if (c==EOF) {
+				string err=
+					"EOF reached unexpectedly reading field: "+
+					mNames[colnum];
+				throw err.c_str();
+			}
+
+            // if NULL, we are skipping this data
+            if (!skipping) {
+                *buff = c;
+                buff++;
+            }
+		}
+
+		// Read the delimiter or EOL
+		c=fgetc(mFptr);
+
+	}
+}
+
+
+// read single entry
+void Records::read_from_text_column(long long colnum, char* buff)
+{
+
+	if (mTypeNums[colnum] == NPY_STRING) {
+		read_ascii_bytes(colnum, buff);
+	} else {
+		scan_column_values(colnum, buff);
+		// For whitespace we haven't read the delimiter yet
+		if (mReadAsWhitespace) {
+			fgetc(mFptr);
+		}
+	}
+}
+
+// read single entry
+void Records::read_from_binary_column(long long colnum, char* buff)
+{
+    int nread = fread(buff, mSizes[colnum], 1, mFptr);
+    if (nread != 1) {
+        string err="Error reading field: "+mNames[colnum];
+        throw err.c_str();
+    }
+}
+
+
+
+// test code for new style
+PyObject* Records::read_column( PyObject* arrayobj, long colnum) throw (const char* )
+{
+	char* buff=NULL;
+
+    ensure_readable();
+
+    fseek(mFptr, mFileOffset, SEEK_SET);
+
+    // For binary, go ahead and skip to the start of this field in the file
+    if (mFileType == BINARY_FILE) {
+        DoSeek(mOffsets[colnum]);
+    } else {
+		MakeScanFormats(true);
+    }
+
+    for (npy_intp row=0; row<mNrows; row++) {
+
+        char *ptr= (char *) PyArray_GETPTR1(arrayobj, row);
+
+        if (mFileType == BINARY_FILE) {
+            read_from_binary_column(colnum, ptr);
+
+            // skip the rest of the row
+            npy_intp seek_distance = mRowSize - mSizes[colnum];
+
+            DoSeek(seek_distance);
+
+        } else {
+
+            // for text we always need to read each field in order to skip
+            // fields properly
+            for (npy_intp this_colnum=0; this_colnum<mNfields; this_colnum++) {
+
+                if (this_colnum==colnum) {
+                    buff = ptr;
+                } else {
+                    buff = NULL;
+                }
+
+                read_from_text_column(this_colnum, buff);
+            }
+
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+
+
 
 void Records::ReadPrepare()
 {
+    mReadWholeFileBinary = false;
+    mReadWholeRowBinary = false;
+
 	if (mFileType == BINARY_FILE 
 			&& mNrowsToRead == mNrows 
 			&& mKeepNfields == mNfields) {
@@ -444,20 +610,6 @@ void Records::ReadAsciiFields()
 
 
 
-/*
-void Records::ReadField(long long fnum)
-{
-	if (mFileType == BINARY_FILE) {
-		ReadFieldAsBinary(fnum);
-	} else {
-		ReadFieldAsAscii(fnum);
-	}
-}
-*/
-
-
-
-
 void Records::ReadFieldAsBinary(long long fnum)
 {
 	// Read the requested number of bytes
@@ -542,7 +694,7 @@ void Records::ScanVal(long long fnum)
 
 	int type_num = mTypeNums[fnum];
 
-	//{cout<<"  ScanVal with format: "<<mScanFormats[type_num].c_str()<<endl;
+	//{cerr<<"  ScanVal with format: "<<mScanFormats[type_num].c_str()<<endl;
 	//		fflush(stdout);}
 	for (long long el=0; el<mNel[fnum]; el++) {
 		int ret = fscanf(mFptr, mScanFormats[type_num].c_str(), buff);
@@ -559,41 +711,6 @@ void Records::ScanVal(long long fnum)
 		buff += mSizes[fnum]/mNel[fnum] ;
 	}
 }
-
-
-
-
-
-
-
-
-
-void Records::SkipField(long long fnum)
-{
-	if (mFileType == BINARY_FILE) {
-		SkipFieldAsBinary(fnum);
-	} else {
-		SkipFieldAsAscii(fnum);
-	}
-}
-
-void Records::SkipFieldAsBinary(long long fnum)
-{
-	// Skip this field
-	if(fseeko(mFptr, mSizes[fnum], SEEK_CUR) != 0) {
-		string err="Error skipping field: "+mNames[fnum];
-		throw err.c_str();
-	}
-}
-
-// In this case we just call the read program since it knows about
-// skipping
-void Records::SkipFieldAsAscii(long long fnum)
-{
-	ReadFieldAsAscii(fnum);
-}
-
-
 
 void Records::ReadWholeRowBinary()
 {
@@ -809,7 +926,7 @@ void Records::WriteAllAsBinary()
 void Records::WriteRows()
 {
 	if (mDebug) {
-		cout<<"Writing "<<mNrows<<" rows as ASCII"<<endl;
+		cerr<<"Writing "<<mNrows<<" rows as ASCII"<<endl;
 		fflush(stdout);
 	}
 	if (mDebug) DebugOut("Making print formats");
@@ -1069,7 +1186,7 @@ void Records::ProcessFieldsToRead(PyObject* fields)
 	}
 
 	if (mDebug) {
-		cout<<"Will read "<<mKeepNfields<<"/"<<mNfields<<" fields"<<endl;
+		cerr<<"Will read "<<mKeepNfields<<"/"<<mNfields<<" fields"<<endl;
 		fflush(stdout);
 	}
 
@@ -1102,6 +1219,9 @@ npy_intp Records::ProcessSlice(npy_intp row1, npy_intp row2, npy_intp step)
 		extra = 1;
 	}
 	npy_intp nrows = rdiff/step + extra;
+
+
+	if (mDebug) cerr<<"slice: ("<<row1<<", "<<row2<<", "<<step<<") nrows: "<<nrows<<"/"<<mNrows<<"\n";
 	return nrows;
 }
 
@@ -1127,7 +1247,7 @@ void Records::ProcessRowsToRead(PyObject* rows)
 	}
 
 	if (mDebug) {
-		cout<<"Will read "<<mNrowsToRead<<"/"<<mNrows<<" rows"<<endl;
+		cerr<<"Will read "<<mNrowsToRead<<"/"<<mNrows<<" rows"<<endl;
 		fflush(stdout);
 	}
 }
@@ -1135,7 +1255,7 @@ void Records::ProcessRowsToRead(PyObject* rows)
 
 void Records::ProcessNrows(long long nrows) 
 {
-	if (mDebug) {cout<<"nrows = "<<nrows<<endl;fflush(stdout);}
+	if (mDebug) {cerr<<"nrows = "<<nrows<<endl;fflush(stdout);}
 	if (nrows < 1) {
 		throw "Input nrows must be >= 1";
 	}
@@ -1206,7 +1326,7 @@ void Records::ProcessDelim(PyObject* delim_obj)
 		mReadAsWhitespace=false;
 	}
 
-	if (mDebug) {cout<<"Using delim = \""<<mDelim<<"\""<<endl; fflush(stdout);}
+	if (mDebug) {cerr<<"Using delim = \""<<mDelim<<"\""<<endl; fflush(stdout);}
 }
 
 void Records::SetFileType()
@@ -1283,7 +1403,7 @@ PyObject* Records::ExtractSubDescr(
 	PyObject* dlist=PyList_New(0);
 	PyArray_Descr* newdescr=NULL;
 
-	if (mDebug) {cout<<"Extracting sub descr"<<endl;fflush(stdout);}
+	if (mDebug) {cerr<<"Extracting sub descr"<<endl;fflush(stdout);}
 	for (unsigned long long i=0; i<names.size(); i++) {
 		PyObject* item =
 			PyDict_GetItemString(descr->fields, names[i].c_str());
@@ -1291,7 +1411,7 @@ PyObject* Records::ExtractSubDescr(
 		if (item!=NULL) {
 			if (!PyArg_ParseTuple(item, "Oi|O", &fdescr, &offset, &title)) {
 				if (mDebug) 
-				{cout<<"Field: "<<names[i]<<" not right format"<<endl;}
+				{cerr<<"Field: "<<names[i]<<" not right format"<<endl;}
 			} else {
 
 				PyObject* tup = 
@@ -1306,16 +1426,16 @@ PyObject* Records::ExtractSubDescr(
 			}
 		} else {
 			if (mDebug) 
-			{cout<<"field: "<<names[i]<<" does not exist. offset->-1"<<endl;}
+			{cerr<<"field: "<<names[i]<<" does not exist. offset->-1"<<endl;}
 		}
 	}
 
 	// Now convert this list to a descr
-	if (mDebug) {cout<<"Converting list to descr"<<endl;fflush(stdout);}
+	if (mDebug) {cerr<<"Converting list to descr"<<endl;fflush(stdout);}
 	if (!PyArray_DescrConverter(dlist, &newdescr)) {
 		throw "data type not understood";
 	}
-	if (mDebug) {cout<<"  Done"<<endl;fflush(stdout);};
+	if (mDebug) {cerr<<"  Done"<<endl;fflush(stdout);};
 
 	return( (PyObject* )newdescr);
 }
@@ -1341,7 +1461,7 @@ PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* nam
 	if (fdescr->subarray != NULL) {
 		// This is a sub-array and requires the tuple to have a
 		// length specified Here we are implicitly only allowing
-		// subarrays if basic numbers or strings
+		// subarrays of basic numbers or strings
 
 		typestream << fdescr->subarray->base->byteorder;
 		typestream << fdescr->subarray->base->type;
@@ -1402,15 +1522,15 @@ PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* nam
 	}
 
 	if (mDebug) {
-		cout<<"("
+		cerr<<"("
 			<<"'"
 			<<get_object_as_string(PyTuple_GetItem(tup,0))<<"'"
 			<<", '"
 			<<get_object_as_string(PyTuple_GetItem(tup,1))<<"'";
 		if (nel > 1) {
-			cout <<", "<<nel;
+			cerr <<", "<<nel;
 		}
-		cout <<")"<<endl;
+		cerr <<")"<<endl;
 	}
 
 
@@ -1458,7 +1578,7 @@ void Records::ListStringMatch(
 		vector<long long>& matchids)
 {
 
-	if (mDebug) {cout<<"Matching fields to subfields"<<endl;fflush(stdout);}
+	if (mDebug) {cerr<<"Matching fields to subfields"<<endl;fflush(stdout);}
 	long long len=SequenceCheck(list);
 
 	matchids.clear();
@@ -1475,7 +1595,7 @@ void Records::ListStringMatch(
 		for (long long i=0; i<len; i++) {
 			PyObject* item = PySequence_GetItem(list, i);
 			if (!is_python_string(item)) {
-				cout<<"fields["<<i<<"] is not a string; skipping"<<endl;
+				cerr<<"fields["<<i<<"] is not a string; skipping"<<endl;
 				fflush(stdout);
 			} else {
 				string ts = get_object_as_string(item);
@@ -1522,7 +1642,7 @@ long long Records::SequenceCheck(PyObject* obj)
 
 void Records::DebugOut(const char* mess)
 {
-	cout<<mess<<endl;
+	cerr<<mess<<endl;
 	fflush(stdout);
 }
 
@@ -1574,7 +1694,7 @@ void Records::PyDictPrintKeys(PyObject* dict)
 	long long len=SequenceCheck(keys);
 	for (long long i=0; i<len; i++) {
 		PyObject* item = PyList_GetItem(keys, i);
-		cout<<"key["<<i<<"] = "<<get_object_as_string(item)<<endl;
+		cerr<<"key["<<i<<"] = "<<get_object_as_string(item)<<endl;
 		Py_XDECREF(item);
 	}
 
@@ -1603,7 +1723,7 @@ void Records::CopyDescrOrderedNames(PyArray_Descr* descr)
 
 		PyObject* tmp = PyTuple_GET_ITEM(descr->names, i);
 		string tname=get_object_as_string(tmp);
-		if (mDebug) {cout<<"  "<<tname<<endl;}
+		if (mDebug) {cerr<<"  "<<tname<<endl;}
 		mNames.push_back(tname);
 	}
 
@@ -1625,7 +1745,7 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 	// WARNING:  this is long int and being copied to long long
 	long int offset;
 
-	if (mDebug) {cout<<"Copying ordered descr info:"<<endl;fflush(stdout);}
+	if (mDebug) {cerr<<"Copying ordered descr info:"<<endl;fflush(stdout);}
 	for (unsigned long long i=0; i<mNames.size(); i++) {
 		PyObject* item=
 			PyDict_GetItemString(descr->fields, mNames[i].c_str());
@@ -1638,13 +1758,13 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 		if (item!=NULL) {
 			if (!PyArg_ParseTuple(item, "Ol|O", &fdescr, &offset, &title)) {
 				if (mDebug) 
-				{cout<<"Field: "<<mNames[i]<<" not right format"<<endl;}
+				{cerr<<"Field: "<<mNames[i]<<" not right format"<<endl;}
 			} else {
 				mOffsets[i] = offset;
 				mSizes[i] = fdescr->elsize;
 				mTypeNums[i] = fdescr->type_num;
 				if (fdescr->subarray != NULL) {
-                    //cout<<"subarray is not NULL for '"<<mNames[i]<<"'\n";
+                    //cerr<<"subarray is not NULL for '"<<mNames[i]<<"'\n";
 					// Here we are implicitly only allowing subarrays
 					// if basic numbers or strings
 					mNel[i] = mSizes[i]/fdescr->subarray->base->elsize;
@@ -1679,28 +1799,28 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 					mNel[i] = 1;
 				}
 				if (mDebug) {
-					cout<<"  Offset("<<mNames[i]<<"): "<<mOffsets[i]<<endl;
-					cout<<"  Size("<<mNames[i]<<"): "<<mSizes[i]<<endl;
-					cout<<"  nel("<<mNames[i]<<"): "<<mNel[i]<<endl;
-					cout<<"  ndim("<<mNames[i]<<"): "<<mNdim[i]<<endl;
+					cerr<<"  Offset("<<mNames[i]<<"): "<<mOffsets[i]<<endl;
+					cerr<<"  Size("<<mNames[i]<<"): "<<mSizes[i]<<endl;
+					cerr<<"  nel("<<mNames[i]<<"): "<<mNel[i]<<endl;
+					cerr<<"  ndim("<<mNames[i]<<"): "<<mNdim[i]<<endl;
                     if (mNdim[i] > 0) {
-                        cout<<"    dims: [";
+                        cerr<<"    dims: [";
                         for (int ii=0;ii<mNdim[i];ii++) {
-                            cout<<mDims[i][ii];
+                            cerr<<mDims[i][ii];
                             if (ii < mNdim[i]-1){
-                                cout<<",";
+                                cerr<<",";
                             }
                         }
-                        cout<<"]\n";
+                        cerr<<"]\n";
                     }
-					cout<<"  type_num("<<mNames[i]<<"): "<<mTypeNums[i]<<endl;
-					cout<<"  type("<<mNames[i]<<"): "<<fdescr->type<<endl;
-					cout<<endl;
+					cerr<<"  type_num("<<mNames[i]<<"): "<<mTypeNums[i]<<endl;
+					cerr<<"  type("<<mNames[i]<<"): "<<fdescr->type<<endl;
+					cerr<<endl;
 				}
 			}
 		} else {
 			if (mDebug) 
-			{cout<<"field: "<<mNames[i]<<" does not exist. offset->-1"<<endl;}
+			{cerr<<"field: "<<mNames[i]<<" does not exist. offset->-1"<<endl;}
 		}
 	}
 
