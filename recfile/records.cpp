@@ -376,7 +376,9 @@ void Records::read_from_binary_column(long long colnum, char* buff)
 
 
 
-// test code for new style
+/*
+   read all of a single column
+*/
 PyObject* Records::read_column( PyObject* arrayobj, long colnum) throw (const char* )
 {
 	char* buff=NULL;
