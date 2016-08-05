@@ -374,58 +374,254 @@ void Records::read_from_binary_column(long long colnum, char* buff)
     }
 }
 
+npy_intp Records::get_nrows_to_read(PyObject* rows)
+{
+
+    npy_intp nrows = mNrows;
+    if (rows != Py_None) {
+        nrows = PyArray_SIZE(rows);
+    }
+
+    return nrows;
+}
+
+npy_intp Records::get_ncols_to_read(PyObject* colnums)
+{
+
+    npy_intp ncols = mNfields;
+    if (colnums != Py_None) {
+        ncols = PyArray_SIZE(colnums);
+    }
+
+    return ncols;
+}
+
+
+
 
 
 /*
-   read all of a single column
+   read a single column
 */
-PyObject* Records::read_column( PyObject* arrayobj, long colnum) throw (const char* )
+PyObject* Records::_read_text_column(PyObject* arrayobj,
+                                     long colnum,
+                                     PyObject* rows) throw (const char* )
 {
+    bool doall=false;
+    npy_intp nrows2read=0;
+	npy_intp current_row=0;
+	npy_intp row2read=0;
+    npy_int64 row=0;
+
 	char* buff=NULL;
+
+    if (mFileType != ASCII_FILE) {
+		throw "attempt to read binary data as text";
+    }
 
     ensure_readable();
 
-    fseek(mFptr, mFileOffset, SEEK_SET);
+    nrows2read = get_nrows_to_read(rows);
 
-    // For binary, go ahead and skip to the start of this field in the file
-    if (mFileType == BINARY_FILE) {
-        DoSeek(mOffsets[colnum]);
+	if (nrows2read != mNrows) {
+        doall=false;
     } else {
-		MakeScanFormats(true);
+        doall=true;
     }
 
-    for (npy_intp row=0; row<mNrows; row++) {
+    fseek(mFptr, mFileOffset, SEEK_SET);
 
-        char *ptr= (char *) PyArray_GETPTR1(arrayobj, row);
+	MakeScanFormats(true);
 
-        if (mFileType == BINARY_FILE) {
-            read_from_binary_column(colnum, ptr);
-
-            // skip the rest of the row
-            npy_intp seek_distance = mRowSize - mSizes[colnum];
-
-            DoSeek(seek_distance);
-
+    for (npy_intp irow=0; irow<nrows2read; irow++) {
+        if (doall) {
+            row2read = irow;
         } else {
+            row2read = *(npy_int64 *) PyArray_GETPTR1(rows, irow);
+        }
 
-            // for text we always need to read each field in order to skip
-            // fields properly
-            for (npy_intp this_colnum=0; this_colnum<mNfields; this_colnum++) {
+		if (row2read > current_row) {
+			SkipRows(current_row, row2read);
+			current_row=row2read;
+		} 
 
-                if (this_colnum==colnum) {
-                    buff = ptr;
-                } else {
-                    buff = NULL;
-                }
+        char *ptr= (char *) PyArray_GETPTR1(arrayobj, irow);
 
-                read_from_text_column(this_colnum, buff);
+        // for text we always need to read each field in order to skip
+        // fields properly
+        for (npy_intp this_colnum=0; this_colnum<mNfields; this_colnum++) {
+
+            if (this_colnum==colnum) {
+                buff = ptr;
+            } else {
+                buff = NULL;
             }
 
+            read_from_text_column(this_colnum, buff);
         }
+
+        current_row++ ;
     }
 
     Py_RETURN_NONE;
 }
+
+
+PyObject* Records::_read_binary_column(PyObject* arrayobj,
+                                       long colnum,
+                                       PyObject* rows) throw (const char* )
+{
+    bool doall=false;
+    npy_intp nrows2read=0;
+	npy_intp current_row=0;
+	npy_intp row2read=0;
+    npy_int64 row=0;
+
+	char* buff=NULL;
+
+    if (mFileType != BINARY_FILE) {
+		throw "attempt to read text data as binary";
+    }
+
+    ensure_readable();
+
+    nrows2read = get_nrows_to_read(rows);
+
+	if (nrows2read != mNrows) {
+        doall=false;
+    } else {
+        doall=true;
+    }
+
+    fseek(mFptr, mFileOffset, SEEK_SET);
+
+    // For binary, go ahead and skip to the start of this field in the file
+    DoSeek(mOffsets[colnum]);
+
+    for (npy_intp irow=0; irow<nrows2read; irow++) {
+        if (doall) {
+            row2read = irow;
+        } else {
+            row2read = *(npy_int64 *) PyArray_GETPTR1(rows, irow);
+        }
+
+		if (row2read > current_row) {
+			SkipRows(current_row, row2read);
+			current_row=row2read;
+		} 
+
+        char *ptr= (char *) PyArray_GETPTR1(arrayobj, irow);
+
+        read_from_binary_column(colnum, ptr);
+
+        // skip the rest of the row
+        npy_intp seek_distance = mRowSize - mSizes[colnum];
+
+        DoSeek(seek_distance);
+
+        current_row++ ;
+    }
+
+    Py_RETURN_NONE;
+}
+
+PyObject* Records::read_column(PyObject* arrayobj,
+                               long colnum,
+                               PyObject* rows) throw (const char* )
+
+{
+
+    if (mFileType != BINARY_FILE) {
+        return _read_binary_column(arrayobj, colnum, rows);
+    } else {
+        return _read_text_column(arrayobj, colnum, rows);
+    }
+}
+/*
+   read multiple columns
+
+   colnums must be of type npy_int64, and must be unique
+*/
+
+PyObject* Records::_read_binary_columns(PyObject* arrayobj,
+                                        PyObject* colnums,
+                                        PyObject* rows) throw (const char* )
+{
+    bool doall_rows=false;
+	npy_intp
+        current_row=0, current_col=0,
+        row2read=0 col2read=0,
+        seek_distance=0;
+
+    npy_int64 row=0;
+
+	char* buff=NULL;
+
+    ensure_readable();
+
+    npy_intp ncols2read = get_ncols_to_read(colnums);
+    npy_intp nrows2read = get_nrows_to_read(rows);
+
+	if (nrows2read != mNrows) {
+        doall_rows=false;
+    } else {
+        doall_rows=true;
+    }
+
+    fseek(mFptr, mFileOffset, SEEK_SET);
+
+
+    for (npy_intp irow=0; irow<nrows2read; irow++) {
+        char *ptr= (char *) PyArray_GETPTR1(arrayobj, irow);
+
+        if (doall_rows) {
+            row2read = irow;
+        } else {
+            row2read = *(npy_int64 *) PyArray_GETPTR1(rows, irow);
+        }
+
+		if (row2read > current_row) {
+			SkipRows(current_row, row2read);
+			current_row=row2read;
+		} 
+
+        current_col=0;
+        current_offset=0; // offset into this row
+
+        for (npy_intp icol=0; icol<ncols2read; icol++) {
+            col2read = *(npy_int64 *) PyArray_GETPTR1(columns, icol);
+
+            if (col2read > current_col) {
+                seek_distance = mOffsets[col2read] - current_offset;
+                DoSeek(seek_distance);
+
+                current_col=col2read;
+                current_offset += seek_distance;
+            } 
+
+            read_from_binary_column(col2read, ptr);
+
+            // account for offset after read
+            current_offset += mSizes[col2read];
+
+            // move the data pointer also
+            ptr += mSizes[col2read];
+
+            current_col++;
+        }
+
+        // skip the rest of the row if needed
+        if (current_offset < mRowsize) {
+            seek_distance = mRowSize - current_offset;
+            DoSeek(seek_distance);
+        }
+
+        current_row++ ;
+    }
+
+    Py_RETURN_NONE;
+}
+
 
 
 

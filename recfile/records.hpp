@@ -60,13 +60,36 @@ class Records {
 
 
         // new style
+
+        PyObject* read_column(PyObject* arrayobj,
+                              long colnum,
+                              PyObject* input_rows) throw (const char* );
+
+        //PyObject* read_columns(PyObject* arrayobj,
+        //                       PyObject* colnums,
+        //                       PyObject* rows) throw (const char* );
+    private:
+
+        // new style
+        npy_intp get_nrows_to_read(PyObject* rows);
+        npy_intp get_ncols_to_read(PyObject* rows);
+
         void scan_column_values(long long fnum, char* buff);
         void read_ascii_bytes(long long colnum, char* buff);
         void read_from_text_column(long long colnum, char* buff);
         void read_from_binary_column(long long colnum, char* buff);
-        PyObject* read_column( PyObject* arrayobj, long colnum) throw (const char* );
 
-    private:
+        PyObject* _read_binary_column(PyObject* arrayobj,
+                                      long colnum,
+                                      PyObject* input_rows) throw (const char* );
+        PyObject* _read_text_column(PyObject* arrayobj,
+                                    long colnum,
+                                    PyObject* input_rows) throw (const char* );
+
+        PyObject* _read_binary_columns(PyObject* arrayobj,
+                                       long colnum,
+                                       PyObject* input_rows) throw (const char* );
+
 		// Move this to public when needed for testing
         PyObject* Test();
 

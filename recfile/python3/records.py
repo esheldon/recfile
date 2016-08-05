@@ -124,20 +124,8 @@ class Records(_object):
     def update_row_count(self, nrows):
         return _records.Records_update_row_count(self, nrows)
 
-    def scan_column_values(self, fnum, buff):
-        return _records.Records_scan_column_values(self, fnum, buff)
-
-    def read_ascii_bytes(self, colnum, buff):
-        return _records.Records_read_ascii_bytes(self, colnum, buff)
-
-    def read_from_text_column(self, colnum, buff):
-        return _records.Records_read_from_text_column(self, colnum, buff)
-
-    def read_from_binary_column(self, colnum, buff):
-        return _records.Records_read_from_binary_column(self, colnum, buff)
-
-    def read_column(self, arrayobj, colnum):
-        return _records.Records_read_column(self, arrayobj, colnum)
+    def read_column(self, arrayobj, colnum, input_rows):
+        return _records.Records_read_column(self, arrayobj, colnum, input_rows)
 Records_swigregister = _records.Records_swigregister
 Records_swigregister(Records)
 

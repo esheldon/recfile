@@ -259,11 +259,6 @@ class Recfile(object):
     def __init__(self, filename, mode='r', **keys):
         self.open(filename, mode=mode, **keys)
 
-    def __enter__(self):
-        return self
-    def __exit__(self, exception_type, exception_value, traceback):
-        self.close()
-
     def open(self, filename, mode='r', **keys):
         """
         Class:
@@ -331,7 +326,12 @@ class Recfile(object):
                 raise ValueError("You must enter dtype when reading")
 
             self.dtype = numpy.dtype(dtype)
+            if self.is_ascii:
+                # we don't care about byte order for ascii
+                self.dtype = numpy.dtype(remove_dtype_byteorder(self.dtype))
+
             self.colnames = numpy.array(self.dtype.names)
+            self.ncols = self.colnames.size
 
             if nrows is None or nrows < 0:
                 self.nrows = self.get_nrows()
@@ -415,28 +415,69 @@ class Recfile(object):
 
 
     def get_colnum(self, colname):
+        """
+        get the column number for the input column name
+        """
+
+        if not numpy.isscalar(colname):
+            raise ValueError("column name should be a string, "
+                             "got %s" % str(colname))
+
         w,=numpy.where(self.colnames == colname)
         if w.size == 0:
             raise ValueError("column '%s' not found" % colname)
         return w[0]
 
-    def read_column(self, colname):
+    def get_colnums(self, colnames):
+        """
+        get the column number for the input column name
+        """
+
+        colnames = numpy.array(colnames, ndmin=1, copy=False)
+
+        colnums = numpy.zeros(colnames.size, dtype='i8')
+
+        for i in xrange(colnames.size):
+            colnums[i] = get_colnum(colnames[i])
+
+        return numpy.unique( colnums )
+
+    def read_column(self, colname, rows=None):
+        """
+        read a single column from the file, possibly a subset of the rows
+
+        parameters
+        ----------
+        colname: string
+            name of the column
+        rows: array, optional
+            Subset of rows to read
+        """
+
         if self.robj is None:
             raise ValueError("You have not yet opened a file")
+
+        if rows is not None:
+            rows = numpy.array(rows, dtype='i8', copy=False, ndmin=1)
+            nrows = rows.size
+        else:
+            nrows = self.nrows
 
         colnum=self.get_colnum(colname)
 
         dtype=[ self.dtype.descr[colnum] ]
-        tdata=numpy.zeros(self.nrows, dtype=dtype)
-        # we don't want the field name in here
+        tdata=numpy.zeros(nrows, dtype=dtype)
+
+        # we don't want the field name in here since we are reading
+        # a single column
         data=tdata[colname]
 
-        self.robj.read_column(data,int(colnum))
+        self.robj.read_column(data,int(colnum),rows)
 
         return data
 
     def read(self, rows=None, fields=None, columns=None,
-             view=None, split=False, **keys):
+             split=False, **keys):
         """
         Class:
             Recfile
@@ -448,7 +489,6 @@ class Recfile(object):
             r=recfile.Open(...)
             data = r.read(rows=None,
                           fields=None, columns=None,
-                          view=None,
                           split=False)
 
             If no arguments are given, all data are read.
@@ -459,7 +499,6 @@ class Recfile(object):
             fields or columns: A scalar, sequence, or array indicating
                 a subset of field to read. fields and columns mean the
                 same thing.
-            view: Specify an alternative view of the data.
             split: Return a tuple of results rather than a rec array. Note
                 the data are still stored in one big chunk, this is just
                 an alternative access method.  E.g.
@@ -470,51 +509,70 @@ class Recfile(object):
                 # this returns a tuple with an element for each
                 x,y,index = r.read(split=True)
         """
-        
+
         if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
-        rows2read = self._get_rows2read(rows)
-        fields2read = self._get_fields2read(fields, columns=columns)
+        rows = self._get_rows2read(rows)
+        colnums, isscalar = self._get_colnums_to_read(fields, columns=columns)
 
-        result = self.robj.Read(rows=rows2read, fields=fields2read)
+        read_all_rows = (rows is None) or (rows.size == self.nrows)
+        read_all_cols = (colnums is None) or (colnums.size==self.ncols)
 
-        if view is not None:
-            result = result.view(view)
-
-        if split:
-            return split_fields(result)
+        if self.is_ascii:
+            # we always use the same code for ascii
+            result = self.read_columns(colnums, rows=rows)
         else:
-            return result
+            # we have specialized codes for binary
+            if read_all_cols and read_all_rows:
+                result = self.robj.read_all_binary()
+
+            elif read_all_cols:
+                # read some row subset
+                result = self.robj.read_rows_binary(rows)
+            else:
+                # rows can still be zero
+                # read but a row subset and column subset
+                result = self.read_columns(
+                    colnums,
+                    rows=rows,
+                )
+
+        if isscalar:
+            result = result[columns]
+        elif split:
+            result=split_fields(result)
+
+        return result
 
     Read=read
 
     def write(self, data):
         """
-        Class:
-            Recfile
-        Method:
-            write
-        Purpose:
-            Write data to the opened file.  The dtype of the data must match
-            for successive calls to write.
-        Calling Sequence:
-            r=recfile.Open(.....)
-            r.write(array1)
-            r.write(array2)
+        Write data to the file.
+
+        The dtype of the data must match for successive calls to write.
+
+        parameters
+        -----------
+        data: array
+            array with fields
         """
         if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
 
-        dataview = data.view(numpy.ndarray) 
+        dataview = data.view(numpy.ndarray)
         if self.verbose:
             stdout.write("Writing %s: %s\n" % \
                 (dataview.size,pprint.pformat(dataview.dtype.descr)))
 
-        # make sure the data are in native format.  This greatly 
-        # simplifies the C code
-        to_native_inplace(dataview)
+
+        if self.is_ascii:
+            # for ascii, make sure the data are in native format.  This greatly
+            # simplifies the C code
+            to_native_inplace(dataview)
+
         self.robj.Write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
 
         # update nrows to reflect the write
@@ -565,7 +623,9 @@ class Recfile(object):
         return RecfileColumnSubset(self, columns=res)
 
     def read_slice(self, arg, split=False):
-
+        """
+        read a slice of rows
+        """
         if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
@@ -575,7 +635,6 @@ class Recfile(object):
             int(arg.step),
         )
 
-
         if split:
             return split_fields(result)
         else:
@@ -583,11 +642,11 @@ class Recfile(object):
 
         return result
 
-    def get_memmap(self, view=None, header=False):
+    def get_memmap(self, **keys):
+        """
+        no longer supported
+        """
         raise RuntimeError("memmap is no longer supported")
-
-    def __len__(self):
-        return self.nrows
 
 
     def get_subset(self, rows=None, fields=None, columns=None):
@@ -770,7 +829,7 @@ class Recfile(object):
             return None
         if stop < start:
             raise ValueError("start is greater than stop in slice")
-        return numpy.arange(tstart, tstop, step, dtype='intp')
+        return numpy.arange(tstart, tstop, step, dtype='i8')
 
     def _fix_range(self, num, isslice=True):
         """
@@ -801,18 +860,19 @@ class Recfile(object):
             # a sequence entered
             rowlen=len(rows)
 
-            # no copy is made if it is an intp numpy array
-            rows2read = numpy.array(rows,ndmin=1,copy=False, dtype='intp')
+            rows2read = numpy.array(rows,ndmin=1,copy=False, dtype='i8')
             if rows2read.size == 1:
                 rows2read[0] = self._fix_range(rows2read[0], isslice=False)
         except:
             # single object entered
             rows2read = self._fix_range(rows, isslice=False)
-            rows2read = numpy.array([rows2read], dtype='intp')
+            rows2read = numpy.array([rows2read], dtype='i8')
 
 
         # should we do this sort, or assume sorted?
-        rows2read.sort()
+
+        rows2read = numpy.unique(rows2read)
+
         rmin = rows2read[0]
         rmax = rows2read[-1]
         if rmin < 0 or rmax >= self.nrows:
@@ -823,31 +883,37 @@ class Recfile(object):
 
         return rows2read
 
-    def _get_fields2read(self, fields, columns=None):
+    def _get_colnums_to_read(self, fields, columns=None):
         if fields is None:
             fields=columns
 
         if fields is None:
-            return None
-        elif isinstance(fields, (list,numpy.ndarray)):
+            return None, False
+
+        if numpy.isscalar(fields):
+            fields=[fields]
+            is_scalar=True
+
+        if isinstance(fields, (list,numpy.ndarray)):
             f=fields
         elif isinstance(fields,tuple):
             f=list(fields)
         elif isstring(fields):
-            f=[fields]
+            f=fields
         else:
             raise ValueError('fields must be list,tuple,string or array')
 
-        if not isstring(f[0]):
-            # this is probably a list of column numbers, convert to strings
-            allnames = self.dtype.names
-            f = [allnames[i] for i in f]
+        colnums = self.get_colnums(f)
 
-        if self.verbose:
-            _out = (len(f), pprint.pformat(f))
-            stdout.write("\t\tReading %s fields: %s\n" % _out)
+        return colnums, is_scalar
 
-        return f
+    def __enter__(self):
+        return self
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.close()
+    def __len__(self):
+        return self.nrows
+
 
 
 class RecfileSubset(object):
@@ -880,18 +946,18 @@ class RecfileSubset(object):
 
         self.recfile = rf
         self.rows=self.recfile._get_rows2read(rows)
-        self.columns = self.recfile._get_fields2read(columns)
+        self.columns = columns
 
         # alias
         self.__call__ = self.get_subset
 
-    def read(self, view=None, split=False):
+    def read(self, split=False):
         """
         Read the data from disk and return as a numpy array
         """
 
         return self.recfile.read(rows=self.rows, columns=self.columns, 
-                                 view=view, split=split)
+                                 split=split)
 
 
     def get_subset(self, fields=None, columns=None, rows=None):
@@ -955,16 +1021,15 @@ class RecfileColumnSubset(object):
 
         self.recfile = rf
         self.columns = columns
-        self.columns = self.recfile._get_fields2read(columns)
 
 
-    def read(self, rows=None, view=None, split=False):
+    def read(self, rows=None, split=False):
         """
         Read the data from disk and return as a numpy array
         """
 
         return self.recfile.read(rows=rows, columns=self.columns,
-                                 view=view, split=split)
+                                 split=split)
 
     def __getitem__(self, arg):
         """
@@ -1519,6 +1584,21 @@ def isstring(obj):
     else:
         return False
 
+def remove_dtype_byteorder(dtype):
+
+    newdt=[]
+    for dt in dtype.descr:
+
+        typestr = dt[1][1:]
+        if len(dt) == 3:
+            dt = (dt[0], typestr, dt[2])
+        else:
+            dt = (dt[0], typestr)
+
+        newdt.append(newdt)
+
+    return newdt
+
 def to_native_inplace(array):
     """
     Convert to native byte ordering in place
@@ -1531,23 +1611,23 @@ def to_native_inplace(array):
 
     data_little=False
     if array.dtype.names is None:
-        data_little = is_little_endian(array)
+        data_little = is_little_endian(array.dtype)
     else:
         # assume all are same byte order: we only need to find one with
         # little endian
         for fname in array.dtype.names:
-            if is_little_endian(array[fname]):
+            if is_little_endian(array[fname].dtype):
                 data_little=True
                 break
 
-    if ( (machine_little and not data_little) 
+    if ( (machine_little and not data_little)
             or (not machine_little and data_little) ):
 
         outdata = array.byteswap(True)
         outdata.dtype = outdata.dtype.newbyteorder()
 
 
-def is_little_endian(array):
+def is_little_endian(dtype):
     """
     Return True if array is little endian. Note strings are neither big
     or little endian.  The input must be a simple numpy array, not
@@ -1562,7 +1642,7 @@ def is_little_endian(array):
     else:
         machine_little=False
 
-    byteorder = array.dtype.base.byteorder
+    byteorder = dtype.base.byteorder
     return (byteorder == '<') or (machine_little and byteorder == '=')
 
 

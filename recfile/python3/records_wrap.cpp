@@ -3817,191 +3817,12 @@ fail:
 }
 
 
-SWIGINTERN PyObject *_wrap_Records_scan_column_values(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
-  PyObject *resultobj = 0;
-  Records *arg1 = (Records *) 0 ;
-  long long arg2 ;
-  char *arg3 = (char *) 0 ;
-  void *argp1 = 0 ;
-  int res1 = 0 ;
-  long long val2 ;
-  int ecode2 = 0 ;
-  int res3 ;
-  char *buf3 = 0 ;
-  int alloc3 = 0 ;
-  PyObject * obj0 = 0 ;
-  PyObject * obj1 = 0 ;
-  PyObject * obj2 = 0 ;
-  char *  kwnames[] = {
-    (char *) "self",(char *) "fnum",(char *) "buff", NULL 
-  };
-  
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOO:Records_scan_column_values",kwnames,&obj0,&obj1,&obj2)) SWIG_fail;
-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_scan_column_values" "', argument " "1"" of type '" "Records *""'"); 
-  }
-  arg1 = reinterpret_cast< Records * >(argp1);
-  ecode2 = SWIG_AsVal_long_SS_long(obj1, &val2);
-  if (!SWIG_IsOK(ecode2)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "Records_scan_column_values" "', argument " "2"" of type '" "long long""'");
-  } 
-  arg2 = static_cast< long long >(val2);
-  res3 = SWIG_AsCharPtrAndSize(obj2, &buf3, NULL, &alloc3);
-  if (!SWIG_IsOK(res3)) {
-    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "Records_scan_column_values" "', argument " "3"" of type '" "char *""'");
-  }
-  arg3 = reinterpret_cast< char * >(buf3);
-  (arg1)->scan_column_values(arg2,arg3);
-  resultobj = SWIG_Py_Void();
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return resultobj;
-fail:
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return NULL;
-}
-
-
-SWIGINTERN PyObject *_wrap_Records_read_ascii_bytes(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
-  PyObject *resultobj = 0;
-  Records *arg1 = (Records *) 0 ;
-  long long arg2 ;
-  char *arg3 = (char *) 0 ;
-  void *argp1 = 0 ;
-  int res1 = 0 ;
-  long long val2 ;
-  int ecode2 = 0 ;
-  int res3 ;
-  char *buf3 = 0 ;
-  int alloc3 = 0 ;
-  PyObject * obj0 = 0 ;
-  PyObject * obj1 = 0 ;
-  PyObject * obj2 = 0 ;
-  char *  kwnames[] = {
-    (char *) "self",(char *) "colnum",(char *) "buff", NULL 
-  };
-  
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOO:Records_read_ascii_bytes",kwnames,&obj0,&obj1,&obj2)) SWIG_fail;
-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_ascii_bytes" "', argument " "1"" of type '" "Records *""'"); 
-  }
-  arg1 = reinterpret_cast< Records * >(argp1);
-  ecode2 = SWIG_AsVal_long_SS_long(obj1, &val2);
-  if (!SWIG_IsOK(ecode2)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "Records_read_ascii_bytes" "', argument " "2"" of type '" "long long""'");
-  } 
-  arg2 = static_cast< long long >(val2);
-  res3 = SWIG_AsCharPtrAndSize(obj2, &buf3, NULL, &alloc3);
-  if (!SWIG_IsOK(res3)) {
-    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "Records_read_ascii_bytes" "', argument " "3"" of type '" "char *""'");
-  }
-  arg3 = reinterpret_cast< char * >(buf3);
-  (arg1)->read_ascii_bytes(arg2,arg3);
-  resultobj = SWIG_Py_Void();
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return resultobj;
-fail:
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return NULL;
-}
-
-
-SWIGINTERN PyObject *_wrap_Records_read_from_text_column(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
-  PyObject *resultobj = 0;
-  Records *arg1 = (Records *) 0 ;
-  long long arg2 ;
-  char *arg3 = (char *) 0 ;
-  void *argp1 = 0 ;
-  int res1 = 0 ;
-  long long val2 ;
-  int ecode2 = 0 ;
-  int res3 ;
-  char *buf3 = 0 ;
-  int alloc3 = 0 ;
-  PyObject * obj0 = 0 ;
-  PyObject * obj1 = 0 ;
-  PyObject * obj2 = 0 ;
-  char *  kwnames[] = {
-    (char *) "self",(char *) "colnum",(char *) "buff", NULL 
-  };
-  
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOO:Records_read_from_text_column",kwnames,&obj0,&obj1,&obj2)) SWIG_fail;
-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_from_text_column" "', argument " "1"" of type '" "Records *""'"); 
-  }
-  arg1 = reinterpret_cast< Records * >(argp1);
-  ecode2 = SWIG_AsVal_long_SS_long(obj1, &val2);
-  if (!SWIG_IsOK(ecode2)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "Records_read_from_text_column" "', argument " "2"" of type '" "long long""'");
-  } 
-  arg2 = static_cast< long long >(val2);
-  res3 = SWIG_AsCharPtrAndSize(obj2, &buf3, NULL, &alloc3);
-  if (!SWIG_IsOK(res3)) {
-    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "Records_read_from_text_column" "', argument " "3"" of type '" "char *""'");
-  }
-  arg3 = reinterpret_cast< char * >(buf3);
-  (arg1)->read_from_text_column(arg2,arg3);
-  resultobj = SWIG_Py_Void();
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return resultobj;
-fail:
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return NULL;
-}
-
-
-SWIGINTERN PyObject *_wrap_Records_read_from_binary_column(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
-  PyObject *resultobj = 0;
-  Records *arg1 = (Records *) 0 ;
-  long long arg2 ;
-  char *arg3 = (char *) 0 ;
-  void *argp1 = 0 ;
-  int res1 = 0 ;
-  long long val2 ;
-  int ecode2 = 0 ;
-  int res3 ;
-  char *buf3 = 0 ;
-  int alloc3 = 0 ;
-  PyObject * obj0 = 0 ;
-  PyObject * obj1 = 0 ;
-  PyObject * obj2 = 0 ;
-  char *  kwnames[] = {
-    (char *) "self",(char *) "colnum",(char *) "buff", NULL 
-  };
-  
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOO:Records_read_from_binary_column",kwnames,&obj0,&obj1,&obj2)) SWIG_fail;
-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_from_binary_column" "', argument " "1"" of type '" "Records *""'"); 
-  }
-  arg1 = reinterpret_cast< Records * >(argp1);
-  ecode2 = SWIG_AsVal_long_SS_long(obj1, &val2);
-  if (!SWIG_IsOK(ecode2)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "Records_read_from_binary_column" "', argument " "2"" of type '" "long long""'");
-  } 
-  arg2 = static_cast< long long >(val2);
-  res3 = SWIG_AsCharPtrAndSize(obj2, &buf3, NULL, &alloc3);
-  if (!SWIG_IsOK(res3)) {
-    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "Records_read_from_binary_column" "', argument " "3"" of type '" "char *""'");
-  }
-  arg3 = reinterpret_cast< char * >(buf3);
-  (arg1)->read_from_binary_column(arg2,arg3);
-  resultobj = SWIG_Py_Void();
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return resultobj;
-fail:
-  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
-  return NULL;
-}
-
-
 SWIGINTERN PyObject *_wrap_Records_read_column(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
   PyObject *resultobj = 0;
   Records *arg1 = (Records *) 0 ;
   PyObject *arg2 = (PyObject *) 0 ;
   long arg3 ;
+  PyObject *arg4 = (PyObject *) 0 ;
   void *argp1 = 0 ;
   int res1 = 0 ;
   long val3 ;
@@ -4009,12 +3830,13 @@ SWIGINTERN PyObject *_wrap_Records_read_column(PyObject *SWIGUNUSEDPARM(self), P
   PyObject * obj0 = 0 ;
   PyObject * obj1 = 0 ;
   PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
   char *  kwnames[] = {
-    (char *) "self",(char *) "arrayobj",(char *) "colnum", NULL 
+    (char *) "self",(char *) "arrayobj",(char *) "colnum",(char *) "input_rows", NULL 
   };
   PyObject *result = 0 ;
   
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOO:Records_read_column",kwnames,&obj0,&obj1,&obj2)) SWIG_fail;
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOOO:Records_read_column",kwnames,&obj0,&obj1,&obj2,&obj3)) SWIG_fail;
   res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
   if (!SWIG_IsOK(res1)) {
     SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_column" "', argument " "1"" of type '" "Records *""'"); 
@@ -4026,8 +3848,9 @@ SWIGINTERN PyObject *_wrap_Records_read_column(PyObject *SWIGUNUSEDPARM(self), P
     SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "Records_read_column" "', argument " "3"" of type '" "long""'");
   } 
   arg3 = static_cast< long >(val3);
+  arg4 = obj3;
   try {
-    result = (PyObject *)(arg1)->read_column(arg2,arg3);
+    result = (PyObject *)(arg1)->read_column(arg2,arg3,arg4);
   }
   catch(char const *_e) {
     PyErr_SetString(PyExc_RuntimeError, _e);
@@ -4059,10 +3882,6 @@ static PyMethodDef SwigMethods[] = {
 	 { (char *)"Records_Close", _wrap_Records_Close, METH_VARARGS, NULL},
 	 { (char *)"Records_write_string", (PyCFunction) _wrap_Records_write_string, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_update_row_count", (PyCFunction) _wrap_Records_update_row_count, METH_VARARGS | METH_KEYWORDS, NULL},
-	 { (char *)"Records_scan_column_values", (PyCFunction) _wrap_Records_scan_column_values, METH_VARARGS | METH_KEYWORDS, NULL},
-	 { (char *)"Records_read_ascii_bytes", (PyCFunction) _wrap_Records_read_ascii_bytes, METH_VARARGS | METH_KEYWORDS, NULL},
-	 { (char *)"Records_read_from_text_column", (PyCFunction) _wrap_Records_read_from_text_column, METH_VARARGS | METH_KEYWORDS, NULL},
-	 { (char *)"Records_read_from_binary_column", (PyCFunction) _wrap_Records_read_from_binary_column, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_read_column", (PyCFunction) _wrap_Records_read_column, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_swigregister", Records_swigregister, METH_VARARGS, NULL},
 	 { NULL, NULL, 0, NULL }
