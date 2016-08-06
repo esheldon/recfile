@@ -529,14 +529,12 @@ class Recfile(object):
 
             elif read_all_cols:
                 # read some row subset
-                result = self.robj.read_rows_binary(rows)
+                result = self.robj.read_binary_rows(rows)
+
             else:
                 # rows can still be zero
                 # read but a row subset and column subset
-                result = self.read_columns(
-                    colnums,
-                    rows=rows,
-                )
+                result = self.read_columns(colnums,rows=rows)
 
         if isscalar:
             result = result[columns]

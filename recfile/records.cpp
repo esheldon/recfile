@@ -543,6 +543,20 @@ PyObject* Records::read_column(PyObject* arrayobj,
    colnums must be of type npy_int64, and must be unique
 */
 
+PyObject* Records::read_columns(PyObject* arrayobj,
+                                PyObject* colnums,
+                                PyObject* rows) throw (const char* )
+
+{
+
+    if (mFileType != BINARY_FILE) {
+        return _read_binary_columns(arrayobj, colnums, rows);
+    } else {
+        //return _read_text_columns(arrayobj, colnums, rows);
+    }
+}
+
+
 PyObject* Records::_read_binary_columns(PyObject* arrayobj,
                                         PyObject* colnums,
                                         PyObject* rows) throw (const char* )

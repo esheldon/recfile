@@ -65,9 +65,10 @@ class Records {
                               long colnum,
                               PyObject* input_rows) throw (const char* );
 
-        //PyObject* read_columns(PyObject* arrayobj,
-        //                       PyObject* colnums,
-        //                       PyObject* rows) throw (const char* );
+        PyObject* read_columns(PyObject* arrayobj,
+                               PyObject* colnums,
+                               PyObject* rows) throw (const char* );
+
     private:
 
         // new style
