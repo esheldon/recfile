@@ -90,6 +90,10 @@ class Records {
                                        long colnum,
                                        PyObject* input_rows) throw (const char* );
 
+        PyObject* _read_binary_columns(PyObject* arrayobj,
+                                       PyObject* colnums,
+                                       PyObject* rows) throw (const char* );
+
 		// Move this to public when needed for testing
         PyObject* Test();
 

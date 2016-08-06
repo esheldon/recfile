@@ -550,7 +550,8 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
     bool doall_rows=false;
 	npy_intp
         current_row=0, current_col=0,
-        row2read=0 col2read=0,
+        current_offset=0,
+        row2read=0, col2read=0,
         seek_distance=0;
 
     npy_int64 row=0;
@@ -589,7 +590,7 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
         current_offset=0; // offset into this row
 
         for (npy_intp icol=0; icol<ncols2read; icol++) {
-            col2read = *(npy_int64 *) PyArray_GETPTR1(columns, icol);
+            col2read = *(npy_int64 *) PyArray_GETPTR1(colnums, icol);
 
             if (col2read > current_col) {
                 seek_distance = mOffsets[col2read] - current_offset;
@@ -611,7 +612,7 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
         }
 
         // skip the rest of the row if needed
-        if (current_offset < mRowsize) {
+        if (current_offset < mRowSize) {
             seek_distance = mRowSize - current_offset;
             DoSeek(seek_distance);
         }
