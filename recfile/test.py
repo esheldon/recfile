@@ -1,0 +1,648 @@
+from __future__ import with_statement, print_function
+import sys, os
+import tempfile
+import warnings
+import numpy
+from numpy import arange, array
+
+from . import Util
+from .Util import Recfile
+
+import unittest
+
+if sys.version_info > (3,0,0):
+    stype=(str,bytes)
+else:
+    stype=str
+
+
+def test():
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestReadWrite)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
+class TestReadWrite(unittest.TestCase):
+    def setUp(self):
+
+        nvec = 2
+        ashape=(21,21)
+        Sdtype = 'S6'
+        # all currently available types, scalar, 1-d and 2-d array columns
+        dtype=[('u1scalar','u1'),
+               ('i1scalar','i1'),
+               #('b1scalar','?'),
+               ('u2scalar','u2'),
+               ('i2scalar','i2'),
+               ('u4scalar','u4'),
+               ('i4scalar','<i4'), # mix the byte orders a bit, test swapping
+               ('i8scalar','i8'),
+               ('f4scalar','f4'),
+               ('f8scalar','>f8'),
+               #('c8scalar','c8'), # complex, two 32-bit
+               #('c16scalar','c16'), # complex, two 32-bit
+
+               ('u1vec','u1',nvec),
+               ('i1vec','i1',nvec),
+               #('b1vec','?',nvec),
+               ('u2vec','u2',nvec),
+               ('i2vec','i2',nvec),
+               ('u4vec','u4',nvec),
+               ('i4vec','i4',nvec),
+               ('i8vec','i8',nvec),
+               ('f4vec','f4',nvec),
+               ('f8vec','f8',nvec),
+               #('c8vec','c8',nvec),
+               #('c16vec','c16',nvec),
+ 
+               ('u1arr','u1',ashape),
+               ('i1arr','i1',ashape),
+               #('b1arr','?',ashape),
+               ('u2arr','u2',ashape),
+               ('i2arr','i2',ashape),
+               ('u4arr','u4',ashape),
+               ('i4arr','i4',ashape),
+               ('i8arr','i8',ashape),
+               ('f4arr','f4',ashape),
+               ('f8arr','f8',ashape),
+               #('c8arr','c8',ashape),
+               #('c16arr','c16',ashape),
+
+               ('Sscalar',Sdtype),
+               ('Svec',   Sdtype, nvec),
+               ('Sarr',   Sdtype, ashape)]
+
+        dtype2=[('index','i4'),
+                ('x','f8'),
+                ('y','f8')]
+
+        nrows=4
+        data=numpy.zeros(nrows, dtype=dtype)
+
+        #dtypes=['u1','i1','u2','i2','u4','i4','i8','f4','f8','c8','c16']
+        dtypes=['u1','i1','u2','i2','u4','i4','i8','f4','f8']
+        for t in dtypes:
+            if t in ['c8','c16']:
+                data[t+'scalar'] = [complex(i+1,(i+1)*2) for i in xrange(nrows)]
+                vname=t+'vec'
+                for row in xrange(nrows):
+                    for i in xrange(nvec):
+                        index=(row+1)*(i+1)
+                        data[vname][row,i] = complex(index,index*2)
+                aname=t+'arr'
+                for row in xrange(nrows):
+                    for i in xrange(ashape[0]):
+                        for j in xrange(ashape[1]):
+                            index=(row+1)*(i+1)*(j+1)
+                            data[aname][row,i,j] = complex(index,index*2)
+
+            else:
+                data[t+'scalar'] = 1 + numpy.arange(nrows, dtype=t)
+                data[t+'vec'] = 1 + numpy.arange(nrows*nvec,dtype=t).reshape(nrows,nvec)
+                arr = 1 + numpy.arange(nrows*ashape[0]*ashape[1],dtype=t)
+                data[t+'arr'] = arr.reshape(nrows,ashape[0],ashape[1])
+
+        """
+        for t in ['b1']:
+            data[t+'scalar'] = (numpy.arange(nrows) % 2 == 0).astype('?')
+            data[t+'vec'] = (numpy.arange(nrows*nvec) % 2 == 0).astype('?').reshape(nrows,nvec)
+            arr = (numpy.arange(nrows*ashape[0]*ashape[1]) % 2 == 0).astype('?')
+            data[t+'arr'] = arr.reshape(nrows,ashape[0],ashape[1])
+        """
+
+
+        data['Sscalar'] = ['hello','world','good','bye']
+        data['Svec'][:,0] = 'hello'
+        data['Svec'][:,1] = 'world'
+
+        s = 1 + numpy.arange(nrows*ashape[0]*ashape[1])
+        s = ['%s' % el for el in s]
+        data['Sarr'] = numpy.array(s).reshape(nrows,ashape[0],ashape[1])
+
+        self.data = data
+
+
+    def _get_prefix(self, name, delim):
+        if delim is not None:
+            delimstr=delim.replace(' ','-')
+            delimstr=delim.replace('\t','tab')
+        else:
+            delimstr='binary'
+
+        prefix='recfile-%s-%s-' % (name,delimstr)
+        return prefix
+
+    def _get_testfile(self, name, delim):
+        prefix=self._get_prefix(name, delim)
+        fname=tempfile.mktemp(prefix=prefix,suffix='.rec')
+        return fname
+
+    '''
+    def testWriteRead(self):
+        """
+        Test a basic table write, data and a header, then reading back in to
+        check the values
+        """
+
+        dtype=self.data.dtype
+        nrows=self.data.size
+        for delim in [None,",", ":","\t", " "]:
+
+            try:
+                fname=self._get_testfile("testWriteRead",delim)
+                with Recfile(fname,mode='w',delim=delim) as robj:
+
+                    try:
+                        robj.write(self.data)
+                        write_success=True
+                    except:
+                        write_success=False
+
+                    self.assertTrue(write_success,"testing write does not raise an error")
+                    if not write_success:
+                        skipTest("cannot test result if write failed")
+
+                with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
+                    d = robj.read()
+
+                self.compare_rec(self.data, d, "table read/write")
+
+                # see if our convenience functions are working
+                Util.write(fname, self.data)
+                d = Util.read(fname, dtype)
+                self.compare_rec(self.data, d, "test read/write with convenience functions")
+
+            finally:
+                if os.path.exists(fname):
+                    os.remove(fname)
+    '''
+
+    def testSubsets(self):
+        """
+        Test reading by slice
+        """
+
+        dtype=self.data.dtype
+        nrows=self.data.size
+        for delim in [None,",", ":","\t", " "]:
+        #for delim in [None]:
+
+            try:
+                fname=self._get_testfile("testSlice",delim)
+                with Recfile(fname,mode='w',delim=delim) as robj:
+                    # initial write
+                    robj.write(self.data)
+
+
+                with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
+
+                    #d=robj.read(columns='f4vec')
+                    #d=robj.read()
+                    """
+                    # range of rows
+                    d=robj[:]
+                    self.compare_rec(self.data, d, "row range all")
+
+                    d=robj[1:3]
+                    self.compare_rec(self.data[1:3], d, "row range")
+                    """
+
+                    # test reading single columns
+                    for f in self.data.dtype.names:
+                        #d = robj[f][:]
+                        d = robj.read_column(f)
+                        self.compare_array(self.data[f], d, "test read all rows %s column subset" % f)
+
+                        rows = [1,3]
+                        d = robj.read_column(f, rows=rows)
+                        self.compare_array(self.data[f][rows], d, "test read rows %s column subset" % f)
+
+
+
+                    """
+                    # test reading row subsets
+                    rows = [1,3]
+                    for f in self.data.dtype.names:
+                        d = robj[f][rows]
+                        self.compare_array(self.data[f][rows], d, "test %s row subset" % f)
+                    for f in self.data.dtype.names:
+                        d = robj[f][1:3]
+                        self.compare_array(self.data[f][1:3], d, "test %s row slice" % f)
+
+                    # now list of columns
+                    cols=['u2scalar','f4vec','Sarr']
+                    d = robj[cols][:]
+                    for f in d.dtype.names:
+                        self.compare_array(self.data[f][:], d[f], "test column list %s" % f)
+
+                    cols=['u2scalar','f4vec','Sarr']
+                    d = robj[cols][rows]
+                    for f in d.dtype.names:
+                        self.compare_array(self.data[f][rows], d[f], "test column list %s row subset" % f)
+
+                    cols=['u2scalar','f4vec','Sarr']
+                    d = robj[cols][1:3]
+                    for f in d.dtype.names:
+                        self.compare_array(self.data[f][1:3], d[f], "test column list %s row slice" % f)
+                    """
+
+
+            finally:
+                if os.path.exists(fname):
+                    os.remove(fname)
+
+
+    '''
+    def testTableAppend(self):
+        """
+        Test creating a table and appending new rows.
+        """
+
+        fname=tempfile.mktemp(prefix='fitsio-TableAppend-',suffix='.fits')
+        try:
+            with fitsio.FITS(fname,'rw',clobber=True) as fits:
+
+                # initial write
+                fits.write_table(self.data, header=self.hdr, extname='mytable')
+                # now append
+                data2 = self.data.copy()
+                data2['f4scalar'] = 3
+                fits[1].append(data2)
+
+                d = fits[1].read()
+                self.assertEqual(d.size, self.data.size*2)
+
+                self.compare_rec(self.data, d[0:self.data.size], "Comparing initial write")
+                self.compare_rec(data2, d[self.data.size:], "Comparing appended data")
+
+                h = fits[1].read_header()
+                self.compare_headerlist_header(self.hdr, h)
+
+        finally:
+            if os.path.exists(fname):
+                os.remove(fname)
+
+
+
+    def testTableSubsets(self):
+        """
+        Test a basic table write, data and a header, then reading back in to
+        check the values
+        """
+
+        fname=tempfile.mktemp(prefix='fitsio-TableWrite-',suffix='.fits')
+        try:
+            with fitsio.FITS(fname,'rw',clobber=True) as fits:
+
+                fits.write_table(self.data, header=self.hdr, extname='mytable')
+
+
+                rows = [1,3]
+                d = fits[1].read(rows=rows)
+                self.compare_rec_subrows(self.data, d, rows, "table subset")
+                columns = ['i1scalar','f4arr']
+                d = fits[1].read(columns=columns, rows=rows)
+
+                for f in columns:
+                    d = fits[1].read_column(f,rows=rows)
+                    self.compare_array(self.data[f][rows], d, "row subset, multi-column '%s'" % f)
+                for f in self.data.dtype.names:
+                    d = fits[1].read_column(f,rows=rows)
+                    self.compare_array(self.data[f][rows], d, "row subset, column '%s'" % f)
+
+        finally:
+            if os.path.exists(fname):
+                os.remove(fname)
+
+
+
+    def testGZWriteRead(self):
+        """
+        Test a basic table write, data and a header, then reading back in to
+        check the values
+
+        this code all works, but the file is zere size when done!
+        """
+
+        fname=tempfile.mktemp(prefix='fitsio-GZTableWrite-',suffix='.fits.gz')
+        try:
+            with fitsio.FITS(fname,'rw',clobber=True) as fits:
+
+                fits.write_table(self.data, header=self.hdr, extname='mytable')
+
+                d = fits[1].read()
+                self.compare_rec(self.data, d, "gzip write/read")
+
+                h = fits[1].read_header()
+                for entry in self.hdr:
+                    name=entry['name'].upper()
+                    value=entry['value']
+                    hvalue = h[name]
+                    if isinstance(hvalue,str):
+                        hvalue = hvalue.strip()
+                    self.assertEqual(value,hvalue,"testing header key '%s'" % name)
+
+                    if 'comment' in entry:
+                        self.assertEqual(entry['comment'].strip(),
+                                         h.get_comment(name).strip(),
+                                         "testing comment for header key '%s'" % name)
+            stat=os.stat(fname)
+            self.assertNotEqual(stat.st_size, 0, "Making sure the data was flushed to disk")
+        finally:
+            if os.path.exists(fname):
+                os.remove(fname)
+
+    def testBz2Read(self):
+        """
+        Write a normal .fits file, run bzip2 on it, then read the bz2
+        file and verify that it's the same as what we put in; we don't
+        [currently support or] test *writing* bzip2.
+        """
+        fname=tempfile.mktemp(prefix='fitsio-BZ2TableWrite-',suffix='.fits')
+        bzfname = fname + '.bz2'
+
+        try:
+            fits = fitsio.FITS(fname,'rw',clobber=True)
+            fits.write_table(self.data, header=self.hdr, extname='mytable')
+            fits.close()
+    
+            os.system('bzip2 %s' % fname)
+            f2 = fitsio.FITS(bzfname)
+            d = f2[1].read()
+            self.compare_rec(self.data, d, "bzip2 read")
+    
+            h = f2[1].read_header()
+            for entry in self.hdr:
+                name=entry['name'].upper()
+                value=entry['value']
+                hvalue = h[name]
+                if isinstance(hvalue,str):
+                    hvalue = hvalue.strip()
+                self.assertEqual(value,hvalue,"testing header key '%s'" % name)
+                if 'comment' in entry:
+                    self.assertEqual(entry['comment'].strip(),
+                                     h.get_comment(name).strip(),
+                                     "testing comment for header key '%s'" % name)
+        except:
+            import traceback
+            traceback.print_exc()
+            self.assertTrue(False, 'Exception in testing bzip2 reading')
+        finally:
+            if os.path.exists(fname):
+                os.remove(fname)
+            if os.path.exists(bzfname):
+                os.remove(bzfname)
+            pass
+    def testChecksum(self):
+        """
+        Test a basic table write, data and a header, then reading back in to
+        check the values
+        """
+
+        fname=tempfile.mktemp(prefix='fitsio-Checksum-',suffix='.fits')
+        try:
+            with fitsio.FITS(fname,'rw',clobber=True) as fits:
+
+                fits.write_table(self.data, header=self.hdr, extname='mytable')
+                fits[1].write_checksum()
+                fits[1].verify_checksum()
+        finally:
+            if os.path.exists(fname):
+                os.remove(fname)
+
+
+    def testLowerUpper(self):
+        fname=tempfile.mktemp(prefix='fitsio-LowerUpper-',suffix='.fits')
+        dt=[('MyName','f8'),('StuffThings','i4'),('Blah','f4')]
+        data=numpy.zeros(3, dtype=dt)
+        data['MyName'] = numpy.random.random(data.size)
+        data['StuffThings'] = numpy.random.random(data.size)
+        data['Blah'] = numpy.random.random(data.size)
+
+        lnames = [n.lower() for n in data.dtype.names]
+        unames = [n.upper() for n in data.dtype.names]
+
+        try:
+            with fitsio.FITS(fname,'rw',clobber=True) as fits:
+                fits.write(data)
+
+            for i in [1,2]:
+                if i == 1:
+                    lower=True
+                    upper=False
+                else:
+                    lower=False
+                    upper=True
+
+                with fitsio.FITS(fname,'rw', lower=lower, upper=upper) as fits:
+                    for rows in [None, [1,2]]:
+
+                        d=fits[1].read(rows=rows)
+                        self.compare_names(d.dtype.names,data.dtype.names,
+                                           lower=lower,upper=upper)
+
+
+                        d=fits[1].read(rows=rows, columns=['MyName','stuffthings'])
+                        self.compare_names(d.dtype.names,data.dtype.names[0:2],
+                                           lower=lower,upper=upper)
+
+                        d = fits[1][1:2]
+                        self.compare_names(d.dtype.names,data.dtype.names,
+                                           lower=lower,upper=upper)
+
+                        if rows is not None:
+                            d = fits[1][rows]
+                        else:
+                            d = fits[1][:]
+                        self.compare_names(d.dtype.names,data.dtype.names,
+                                           lower=lower,upper=upper)
+
+                        if rows is not None:
+                            d = fits[1][['myname','stuffthings']][rows]
+                        else:
+                            d = fits[1][['myname','stuffthings']][:]
+                        self.compare_names(d.dtype.names,data.dtype.names[0:2],
+                                           lower=lower,upper=upper)
+
+                # using overrides
+                with fitsio.FITS(fname,'rw') as fits:
+                    for rows in [None, [1,2]]:
+
+                        d=fits[1].read(rows=rows, lower=lower, upper=upper)
+                        self.compare_names(d.dtype.names,data.dtype.names,
+                                           lower=lower,upper=upper)
+
+
+                        d=fits[1].read(rows=rows, columns=['MyName','stuffthings'],
+                                       lower=lower,upper=upper)
+                        self.compare_names(d.dtype.names,data.dtype.names[0:2],
+                                           lower=lower,upper=upper)
+
+
+
+                for rows in [None, [1,2]]:
+                    d=fitsio.read(fname, rows=rows, lower=lower, upper=upper)
+                    self.compare_names(d.dtype.names,data.dtype.names,
+                                       lower=lower,upper=upper)
+
+                    d=fitsio.read(fname, rows=rows, columns=['MyName','stuffthings'],
+                                  lower=lower, upper=upper)
+                    self.compare_names(d.dtype.names,data.dtype.names[0:2],
+                                       lower=lower,upper=upper)
+
+
+        finally:
+            if os.path.exists(fname):
+                os.remove(fname)
+    '''
+
+    def compare_names(self, read_names, true_names, lower=False, upper=False):
+        for nread,ntrue in zip(read_names,true_names):
+            if lower:
+                tname = ntrue.lower()
+                mess="lower: '%s' vs '%s'" % (nread,tname)
+            else:
+                tname = ntrue.upper()
+                mess="upper: '%s' vs '%s'" % (nread,tname)
+            self.assertEqual(nread, tname, mess)
+
+
+    def compare_headerlist_header(self, header_list, header):
+        """
+        The first is a list of dicts, second a FITSHDR
+        """
+        for entry in header_list:
+            name=entry['name'].upper()
+            value=entry['value']
+            hvalue = header[name]
+            if isinstance(hvalue,str):
+                hvalue = hvalue.strip()
+            self.assertEqual(value,hvalue,"testing header key '%s'" % name)
+
+            if 'comment' in entry:
+                self.assertEqual(entry['comment'].strip(),
+                                 header.get_comment(name).strip(),
+                                 "testing comment for header key '%s'" % name)
+
+    def compare_array_tol(self, arr1, arr2, tol, name):
+        self.assertEqual(arr1.shape, arr2.shape,
+                         "testing arrays '%s' shapes are equal: "
+                         "input %s, read: %s" % (name, arr1.shape, arr2.shape))
+
+        adiff = numpy.abs( (arr1-arr2)/arr1 )
+        maxdiff = adiff.max()
+        res=numpy.where(adiff  > tol)
+        for i,w in enumerate(res):
+            self.assertEqual(w.size,0,
+                             "testing array '%s' dim %d are "
+                             "equal within tolerance %e, found "
+                             "max diff %e" % (name,i,tol,maxdiff))
+
+
+    def compare_array(self, arr1, arr2, name):
+        #print("arr1:",arr1)
+        #print("arr2:",arr2)
+        self.assertEqual(arr1.shape, arr2.shape,
+                         "testing arrays '%s' shapes are equal: "
+                         "input %s, read: %s" % (name, arr1.shape, arr2.shape))
+
+        res=numpy.where(arr1 != arr2)
+        for i,w in enumerate(res):
+            self.assertEqual(w.size,0,"testing array '%s' dim %d are equal" % (name,i))
+
+    def compare_rec(self, rec1, rec2, name):
+        for f in rec1.dtype.names:
+            self.assertEqual(rec1[f].shape, rec2[f].shape,
+                             "testing '%s' field '%s' shapes are equal: "
+                             "input %s, read: %s" % (name, f,rec1[f].shape, rec2[f].shape))
+
+            res=numpy.where(rec1[f] != rec2[f])
+            for w in res:
+                self.assertEqual(w.size,0,"testing column %s" % f)
+
+    def compare_rec_subrows(self, rec1, rec2, rows, name):
+        for f in rec1.dtype.names:
+            self.assertEqual(rec1[f][rows].shape, rec2[f].shape,
+                             "testing '%s' field '%s' shapes are equal: "
+                             "input %s, read: %s" % (name, f,rec1[f].shape, rec2[f].shape))
+
+            res=numpy.where(rec1[f][rows] != rec2[f])
+            for w in res:
+                self.assertEqual(w.size,0,"testing column %s" % f)
+
+            #self.assertEqual(2,3,"on purpose error")
+
+    def compare_rec_with_var(self, rec1, rec2, name, rows=None):
+        """
+
+        First one *must* be the one with object arrays
+
+        Second can have fixed length
+
+        both should be same number of rows
+
+        """
+
+        if rows is None:
+            rows = arange(rec2.size)
+            self.assertEqual(rec1.size,rec2.size,
+                             "testing '%s' same number of rows" % name)
+
+        # rec2 may have fewer fields
+        for f in rec2.dtype.names:
+
+            # f1 will have the objects
+            if fitsio.fitslib.is_object(rec1[f]):
+                self.compare_object_array(rec1[f], rec2[f], 
+                                          "testing '%s' field '%s'" % (name,f),
+                                          rows=rows)
+            else:                    
+                self.compare_array(rec1[f][rows], rec2[f], 
+                                   "testing '%s' num field '%s' equal" % (name,f))
+
+    def compare_object_array(self, arr1, arr2, name, rows=None): 
+        """
+        The first must be object
+        """
+        if rows is None:
+            rows = arange(arr1.size)
+
+        for i,row in enumerate(rows):
+            if isinstance(arr2[i],stype):
+                self.assertEqual(arr1[row],arr2[i],
+                                "%s str el %d equal" % (name,i))
+            else:
+                delement = arr2[i]
+                orig = arr1[row]
+                s=len(orig)
+                self.compare_array(orig, delement[0:s], 
+                                   "%s num el %d equal" % (name,i))
+
+    def compare_rec_with_var_subrows(self, rec1, rec2, name, rows):
+        """
+
+        Second one must be the one with object arrays
+
+        """
+        for f in rec1.dtype.names:
+            if fitsio.fitslib.is_object(rec2[f]):
+
+                for i in xrange(rec2.size):
+                    if isinstance(rec2[f][i],stype):
+                        self.assertEqual(rec1[f][i],rec2[f][i],
+                                        "testing '%s' str field '%s' el %d equal" % (name,f,i))
+                    else:
+                        delement = rec1[f][i]
+                        orig = rec2[f][i]
+                        s=orig.size
+                        self.compare_array(orig, delement[0:s], 
+                                           "testing '%s' num field '%s' el %d equal" % (name,f,i))
+            else:                    
+                self.compare_array(rec1[f], rec2[f], 
+                                   "testing '%s' num field '%s' equal" % (name,f))
+
+
+
+
+
+if __name__ == '__main__':
+    test()
+
