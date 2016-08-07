@@ -15,6 +15,7 @@ module1 = Extension('recfile._records', sources=sources)
 
 data_files=[]
 
+'''
 version_dir='python%d' % sys.version_info.major
 files2copy=[
     {'from':os.path.join('recfile',version_dir,'records.py'),
@@ -30,6 +31,7 @@ for f in files2copy:
 
     print("copying",f['from'],"to",f['to'])
     shutil.copy(f['from'], f['to'])
+'''
 
 class AddUPS(Command):
     _data_files = data_files

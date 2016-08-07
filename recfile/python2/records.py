@@ -97,8 +97,8 @@ class Records(_object):
     __getattr__ = lambda self, name: _swig_getattr(self, Records, name)
     __repr__ = _swig_repr
 
-    def __init__(self, filename, mode, delim=None, dtype=None, nrows=-9999, offset=0, bracket_arrays=0):
-        this = _records.new_Records(filename, mode, delim, dtype, nrows, offset, bracket_arrays)
+    def __init__(self, filename, mode, delim=None, dtype=None, nrows=-9999, offset=0, bracket_arrays=0, padnull=False, ignorenull=False):
+        this = _records.new_Records(filename, mode, delim, dtype, nrows, offset, bracket_arrays, padnull, ignorenull)
         try:
             self.this.append(this)
         except Exception:
@@ -106,17 +106,11 @@ class Records(_object):
     __swig_destroy__ = _records.delete_Records
     __del__ = lambda self: None
 
-    def Read(self, rows=None, fields=None):
-        return _records.Records_Read(self, rows, fields)
+    def close(self):
+        return _records.Records_close(self)
 
-    def ReadSlice(self, row1, row2, step):
-        return _records.Records_ReadSlice(self, row1, row2, step)
-
-    def Write(self, obj, padnull=False, ignorenull=False):
-        return _records.Records_Write(self, obj, padnull, ignorenull)
-
-    def Close(self):
-        return _records.Records_Close(self)
+    def Write(self, obj):
+        return _records.Records_Write(self, obj)
 
     def write_string(self, obj):
         return _records.Records_write_string(self, obj)
@@ -124,11 +118,11 @@ class Records(_object):
     def update_row_count(self, nrows):
         return _records.Records_update_row_count(self, nrows)
 
-    def read_column(self, arrayobj, colnum, input_rows):
-        return _records.Records_read_column(self, arrayobj, colnum, input_rows)
-
     def read_columns(self, arrayobj, colnums, rows):
         return _records.Records_read_columns(self, arrayobj, colnums, rows)
+
+    def read_binary_slice(self, arrayobj, row1, row2, step):
+        return _records.Records_read_binary_slice(self, arrayobj, row1, row2, step)
 Records_swigregister = _records.Records_swigregister
 Records_swigregister(Records)
 
