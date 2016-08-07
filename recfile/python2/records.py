@@ -98,66 +98,6 @@ class Records(_object):
     __repr__ = _swig_repr
 
     def __init__(self, filename, mode, delim=None, dtype=None, nrows=-9999, offset=0, bracket_arrays=0):
-        """
-
-        Class
-            Records - A class for reading from a file of fixed-length records into
-                numerical python arrays. The file can be binary or ASCII.
-            An new Records class is instantiated using the Open() method:
-                For writing:
-                    import records
-                    r = records.Open(file/fileobj, mode='w', delim='')
-                For reading:
-                    import records
-                    r = records.Open(file/fileobj, delim='', dtype=None, nrows=-9999)
-                    # Arguments can all be given as keywords except the file
-
-                Inputs:
-                    file/fileobj:  A string file name or an open file object.
-                    mode: The file mode.  Default is 'r' but can be 'u' or 'w'.
-                    delim: The delimiter used in the file.  Default is  for 
-                        binary files, but can be any string such as ',', '\t', etc.
-                    dtype:  A numpy dtype object.  REQUIRED FOR READING. For example:
-                        numpy.dtype([('field1', 'i4'),('field2', 'f8')])
-                        some_numpy_array.dtype
-                    nrows: The number of rows in the file.  REQUIRED FOR READING.
-
-            Class Methods:
-                Read(rows=, fields=):
-                    Returns the data in a NumPy array.  Specific rows and fields 
-                    of the file can be specified with the keywords.  Rows must be
-                    sorted and unique.  Can be in any order.
-                Write(numpy_array):
-                    Write the input numpy array to the file.  The array must have
-                    field names defined.
-
-            Examples:
-                import numpy
-                import records
-
-                # Read from a binary file
-                file='test.bin'
-                dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])
-                nrows=10000000
-
-                robj = records.Open(file, dtype=dtype, nrows=nrows)
-                res=robj.Read()
-
-                # Read from a CSV file of the same structure, and only read a subset 
-                # of the data
-                rows2get=[2335,122332,1550021]
-                fields2get='field2'
-                robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)
-                res = robj.Read(rows=rows2get, fields=fields2get)
-
-                # Write a numpy array to a file
-                r = records.Open('test.csv', 'w', ',')
-                r.Write(my_array)
-
-        Modification history:
-            Created: 2008-07-18, Erin Sheldon
-
-        """
         this = _records.new_Records(filename, mode, delim, dtype, nrows, offset, bracket_arrays)
         try:
             self.this.append(this)
@@ -167,139 +107,28 @@ class Records(_object):
     __del__ = lambda self: None
 
     def Read(self, rows=None, fields=None):
-        """
-
-        Read(rows=None, fields=None)
-
-        A class method for the Records class.  Reads the specified rows
-        and fields from the open file and returns the data in a NumPy array.
-
-        Inputs:
-            rows:  A sorted unique set of rows.  May be a scala/rlist/array.
-              Default is all rows.
-            fields: The fields to read.  May be a single string or a list
-              of strings.  Can be in any order.  Default is all fields.
-        Examples:
-            import numpy
-            import records
-            # Read from a binary file
-            file='test.bin'
-            dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])
-            nrows=10000000
-
-            robj = records.Open(file, dtype=dtype, nrows=nrows)
-            res=robj.Read()
-
-            # Read from a CSV file of the same structure, and only read a subset 
-            # of the data
-            rows2get=[2335,122332,1550021]
-            fields2get='field2'
-            robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)
-            res = robj.Read(rows=rows2get, fields=fields2get)
-        """
         return _records.Records_Read(self, rows, fields)
 
-
     def ReadSlice(self, row1, row2, step):
-        """
-
-        Read(rows=None, fields=None)
-
-        A class method for the Records class.  Reads the specified rows
-        and fields from the open file and returns the data in a NumPy array.
-
-        Inputs:
-            rows:  A sorted unique set of rows.  May be a scala/rlist/array.
-              Default is all rows.
-            fields: The fields to read.  May be a single string or a list
-              of strings.  Can be in any order.  Default is all fields.
-        Examples:
-            import numpy
-            import records
-            # Read from a binary file
-            file='test.bin'
-            dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])
-            nrows=10000000
-
-            robj = records.Open(file, dtype=dtype, nrows=nrows)
-            res=robj.Read()
-
-            # Read from a CSV file of the same structure, and only read a subset 
-            # of the data
-            rows2get=[2335,122332,1550021]
-            fields2get='field2'
-            robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)
-            res = robj.Read(rows=rows2get, fields=fields2get)
-        """
         return _records.Records_ReadSlice(self, row1, row2, step)
 
-
     def Write(self, obj, padnull=False, ignorenull=False):
-        """
-
-        Write(numpy_array, pad=False)
-
-        A class method for the Records class.  Writes the input numpy array
-        to the opened file.
-
-        Inputs:
-            array: A NumPy array with fields defined for the records.
-        Keywords:
-        	padnull=False:  
-        		Convert NULL characters to spaces when writing.  Note when
-        		read back in these will not compare equal with the original
-        		data!  This is useful when writing files to be read in by
-        		programs that do not recognize null characters, e.g. sqlite
-        		databases.
-
-        	ignorenull=False:
-        		Ignore NULL characters entirely when writing strings to ascii
-        		files. This is useful when writing files to be read in by
-        		programs that do not recognize null characters, e.g. sqlite
-        		databases.
-
-        Examples:
-            import numpy
-            import records
-            r = records.Open('test.csv', 'w', ',')
-            r.Write(my_array)
-
-        """
         return _records.Records_Write(self, obj, padnull, ignorenull)
 
-
     def Close(self):
-        """
-
-        Close()
-
-        If the file was opened locally, close the file pointer.
-
-        """
         return _records.Records_Close(self)
 
-
     def write_string(self, obj):
-        """
-
-        Close()
-
-        If the file was opened locally, close the file pointer.
-
-        """
         return _records.Records_write_string(self, obj)
 
-
     def update_row_count(self, nrows):
-        """
-
-        Close()
-
-        If the file was opened locally, close the file pointer.
-
-        """
         return _records.Records_update_row_count(self, nrows)
 
+    def read_column(self, arrayobj, colnum, input_rows):
+        return _records.Records_read_column(self, arrayobj, colnum, input_rows)
+
+    def read_columns(self, arrayobj, colnums, rows):
+        return _records.Records_read_columns(self, arrayobj, colnums, rows)
 Records_swigregister = _records.Records_swigregister
 Records_swigregister(Records)
 

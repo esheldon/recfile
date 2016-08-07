@@ -126,6 +126,9 @@ class Records(_object):
 
     def read_column(self, arrayobj, colnum, input_rows):
         return _records.Records_read_column(self, arrayobj, colnum, input_rows)
+
+    def read_columns(self, arrayobj, colnums, rows):
+        return _records.Records_read_columns(self, arrayobj, colnums, rows)
 Records_swigregister = _records.Records_swigregister
 Records_swigregister(Records)
 

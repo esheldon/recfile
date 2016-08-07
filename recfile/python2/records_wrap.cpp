@@ -3817,6 +3817,96 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_Records_read_column(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
+  PyObject *resultobj = 0;
+  Records *arg1 = (Records *) 0 ;
+  PyObject *arg2 = (PyObject *) 0 ;
+  long arg3 ;
+  PyObject *arg4 = (PyObject *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  long val3 ;
+  int ecode3 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
+  char *  kwnames[] = {
+    (char *) "self",(char *) "arrayobj",(char *) "colnum",(char *) "input_rows", NULL 
+  };
+  PyObject *result = 0 ;
+  
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOOO:Records_read_column",kwnames,&obj0,&obj1,&obj2,&obj3)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_column" "', argument " "1"" of type '" "Records *""'"); 
+  }
+  arg1 = reinterpret_cast< Records * >(argp1);
+  arg2 = obj1;
+  ecode3 = SWIG_AsVal_long(obj2, &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "Records_read_column" "', argument " "3"" of type '" "long""'");
+  } 
+  arg3 = static_cast< long >(val3);
+  arg4 = obj3;
+  try {
+    result = (PyObject *)(arg1)->read_column(arg2,arg3,arg4);
+  }
+  catch(char const *_e) {
+    PyErr_SetString(PyExc_RuntimeError, _e);
+    SWIG_fail;
+    
+  }
+  
+  resultobj = result;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_Records_read_columns(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
+  PyObject *resultobj = 0;
+  Records *arg1 = (Records *) 0 ;
+  PyObject *arg2 = (PyObject *) 0 ;
+  PyObject *arg3 = (PyObject *) 0 ;
+  PyObject *arg4 = (PyObject *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
+  char *  kwnames[] = {
+    (char *) "self",(char *) "arrayobj",(char *) "colnums",(char *) "rows", NULL 
+  };
+  PyObject *result = 0 ;
+  
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOOO:Records_read_columns",kwnames,&obj0,&obj1,&obj2,&obj3)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_columns" "', argument " "1"" of type '" "Records *""'"); 
+  }
+  arg1 = reinterpret_cast< Records * >(argp1);
+  arg2 = obj1;
+  arg3 = obj2;
+  arg4 = obj3;
+  try {
+    result = (PyObject *)(arg1)->read_columns(arg2,arg3,arg4);
+  }
+  catch(char const *_e) {
+    PyErr_SetString(PyExc_RuntimeError, _e);
+    SWIG_fail;
+    
+  }
+  
+  resultobj = result;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *Records_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
   PyObject *obj;
   if (!PyArg_ParseTuple(args,(char*)"O:swigregister", &obj)) return NULL;
@@ -3826,237 +3916,16 @@ SWIGINTERN PyObject *Records_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObje
 
 static PyMethodDef SwigMethods[] = {
 	 { (char *)"SWIG_PyInstanceMethod_New", (PyCFunction)SWIG_PyInstanceMethod_New, METH_O, NULL},
-	 { (char *)"new_Records", (PyCFunction) _wrap_new_Records, METH_VARARGS | METH_KEYWORDS, (char *)"\n"
-		"\n"
-		"Class\n"
-		"    Records - A class for reading from a file of fixed-length records into\n"
-		"        numerical python arrays. The file can be binary or ASCII.\n"
-		"    An new Records class is instantiated using the Open() method:\n"
-		"        For writing:\n"
-		"            import records\n"
-		"            r = records.Open(file/fileobj, mode='w', delim='')\n"
-		"        For reading:\n"
-		"            import records\n"
-		"            r = records.Open(file/fileobj, delim='', dtype=None, nrows=-9999)\n"
-		"            # Arguments can all be given as keywords except the file\n"
-		"\n"
-		"        Inputs:\n"
-		"            file/fileobj:  A string file name or an open file object.\n"
-		"            mode: The file mode.  Default is 'r' but can be 'u' or 'w'.\n"
-		"            delim: The delimiter used in the file.  Default is  for \n"
-		"                binary files, but can be any string such as ',', '\\t', etc.\n"
-		"            dtype:  A numpy dtype object.  REQUIRED FOR READING. For example:\n"
-		"                numpy.dtype([('field1', 'i4'),('field2', 'f8')])\n"
-		"                some_numpy_array.dtype\n"
-		"            nrows: The number of rows in the file.  REQUIRED FOR READING.\n"
-		"\n"
-		"    Class Methods:\n"
-		"        Read(rows=, fields=):\n"
-		"            Returns the data in a NumPy array.  Specific rows and fields \n"
-		"            of the file can be specified with the keywords.  Rows must be\n"
-		"            sorted and unique.  Can be in any order.\n"
-		"        Write(numpy_array):\n"
-		"            Write the input numpy array to the file.  The array must have\n"
-		"            field names defined.\n"
-		"\n"
-		"    Examples:\n"
-		"        import numpy\n"
-		"        import records\n"
-		"\n"
-		"        # Read from a binary file\n"
-		"        file='test.bin'\n"
-		"        dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])\n"
-		"        nrows=10000000\n"
-		"\n"
-		"        robj = records.Open(file, dtype=dtype, nrows=nrows)\n"
-		"        res=robj.Read()\n"
-		"\n"
-		"        # Read from a CSV file of the same structure, and only read a subset \n"
-		"        # of the data\n"
-		"        rows2get=[2335,122332,1550021]\n"
-		"        fields2get='field2'\n"
-		"        robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)\n"
-		"        res = robj.Read(rows=rows2get, fields=fields2get)\n"
-		"\n"
-		"        # Write a numpy array to a file\n"
-		"        r = records.Open('test.csv', 'w', ',')\n"
-		"        r.Write(my_array)\n"
-		"\n"
-		"Modification history:\n"
-		"    Created: 2008-07-18, Erin Sheldon\n"
-		"\n"
-		""},
-	 { (char *)"delete_Records", _wrap_delete_Records, METH_VARARGS, (char *)"\n"
-		"\n"
-		"Class\n"
-		"    Records - A class for reading from a file of fixed-length records into\n"
-		"        numerical python arrays. The file can be binary or ASCII.\n"
-		"    An new Records class is instantiated using the Open() method:\n"
-		"        For writing:\n"
-		"            import records\n"
-		"            r = records.Open(file/fileobj, mode='w', delim='')\n"
-		"        For reading:\n"
-		"            import records\n"
-		"            r = records.Open(file/fileobj, delim='', dtype=None, nrows=-9999)\n"
-		"            # Arguments can all be given as keywords except the file\n"
-		"\n"
-		"        Inputs:\n"
-		"            file/fileobj:  A string file name or an open file object.\n"
-		"            mode: The file mode.  Default is 'r' but can be 'u' or 'w'.\n"
-		"            delim: The delimiter used in the file.  Default is  for \n"
-		"                binary files, but can be any string such as ',', '\\t', etc.\n"
-		"            dtype:  A numpy dtype object.  REQUIRED FOR READING. For example:\n"
-		"                numpy.dtype([('field1', 'i4'),('field2', 'f8')])\n"
-		"                some_numpy_array.dtype\n"
-		"            nrows: The number of rows in the file.  REQUIRED FOR READING.\n"
-		"\n"
-		"    Class Methods:\n"
-		"        Read(rows=, fields=):\n"
-		"            Returns the data in a NumPy array.  Specific rows and fields \n"
-		"            of the file can be specified with the keywords.  Rows must be\n"
-		"            sorted and unique.  Can be in any order.\n"
-		"        Write(numpy_array):\n"
-		"            Write the input numpy array to the file.  The array must have\n"
-		"            field names defined.\n"
-		"\n"
-		"    Examples:\n"
-		"        import numpy\n"
-		"        import records\n"
-		"\n"
-		"        # Read from a binary file\n"
-		"        file='test.bin'\n"
-		"        dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])\n"
-		"        nrows=10000000\n"
-		"\n"
-		"        robj = records.Open(file, dtype=dtype, nrows=nrows)\n"
-		"        res=robj.Read()\n"
-		"\n"
-		"        # Read from a CSV file of the same structure, and only read a subset \n"
-		"        # of the data\n"
-		"        rows2get=[2335,122332,1550021]\n"
-		"        fields2get='field2'\n"
-		"        robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)\n"
-		"        res = robj.Read(rows=rows2get, fields=fields2get)\n"
-		"\n"
-		"        # Write a numpy array to a file\n"
-		"        r = records.Open('test.csv', 'w', ',')\n"
-		"        r.Write(my_array)\n"
-		"\n"
-		"Modification history:\n"
-		"    Created: 2008-07-18, Erin Sheldon\n"
-		"\n"
-		""},
-	 { (char *)"Records_Read", (PyCFunction) _wrap_Records_Read, METH_VARARGS | METH_KEYWORDS, (char *)"\n"
-		"\n"
-		"Read(rows=None, fields=None)\n"
-		"\n"
-		"A class method for the Records class.  Reads the specified rows\n"
-		"and fields from the open file and returns the data in a NumPy array.\n"
-		"\n"
-		"Inputs:\n"
-		"    rows:  A sorted unique set of rows.  May be a scala/rlist/array.\n"
-		"      Default is all rows.\n"
-		"    fields: The fields to read.  May be a single string or a list\n"
-		"      of strings.  Can be in any order.  Default is all fields.\n"
-		"Examples:\n"
-		"    import numpy\n"
-		"    import records\n"
-		"    # Read from a binary file\n"
-		"    file='test.bin'\n"
-		"    dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])\n"
-		"    nrows=10000000\n"
-		"\n"
-		"    robj = records.Open(file, dtype=dtype, nrows=nrows)\n"
-		"    res=robj.Read()\n"
-		"\n"
-		"    # Read from a CSV file of the same structure, and only read a subset \n"
-		"    # of the data\n"
-		"    rows2get=[2335,122332,1550021]\n"
-		"    fields2get='field2'\n"
-		"    robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)\n"
-		"    res = robj.Read(rows=rows2get, fields=fields2get)\n"
-		""},
-	 { (char *)"Records_ReadSlice", (PyCFunction) _wrap_Records_ReadSlice, METH_VARARGS | METH_KEYWORDS, (char *)"\n"
-		"\n"
-		"Read(rows=None, fields=None)\n"
-		"\n"
-		"A class method for the Records class.  Reads the specified rows\n"
-		"and fields from the open file and returns the data in a NumPy array.\n"
-		"\n"
-		"Inputs:\n"
-		"    rows:  A sorted unique set of rows.  May be a scala/rlist/array.\n"
-		"      Default is all rows.\n"
-		"    fields: The fields to read.  May be a single string or a list\n"
-		"      of strings.  Can be in any order.  Default is all fields.\n"
-		"Examples:\n"
-		"    import numpy\n"
-		"    import records\n"
-		"    # Read from a binary file\n"
-		"    file='test.bin'\n"
-		"    dtype=numpy.dtype([('field1','f8'),('field2','2i4'),('field3','i8')])\n"
-		"    nrows=10000000\n"
-		"\n"
-		"    robj = records.Open(file, dtype=dtype, nrows=nrows)\n"
-		"    res=robj.Read()\n"
-		"\n"
-		"    # Read from a CSV file of the same structure, and only read a subset \n"
-		"    # of the data\n"
-		"    rows2get=[2335,122332,1550021]\n"
-		"    fields2get='field2'\n"
-		"    robj = records.Open('test.csv', delim=',', dtype=dtype, nrows=nrows)\n"
-		"    res = robj.Read(rows=rows2get, fields=fields2get)\n"
-		""},
-	 { (char *)"Records_Write", (PyCFunction) _wrap_Records_Write, METH_VARARGS | METH_KEYWORDS, (char *)"\n"
-		"\n"
-		"Write(numpy_array, pad=False)\n"
-		"\n"
-		"A class method for the Records class.  Writes the input numpy array\n"
-		"to the opened file.\n"
-		"\n"
-		"Inputs:\n"
-		"    array: A NumPy array with fields defined for the records.\n"
-		"Keywords:\n"
-		"	padnull=False:  \n"
-		"		Convert NULL characters to spaces when writing.  Note when\n"
-		"		read back in these will not compare equal with the original\n"
-		"		data!  This is useful when writing files to be read in by\n"
-		"		programs that do not recognize null characters, e.g. sqlite\n"
-		"		databases.\n"
-		"\n"
-		"	ignorenull=False:\n"
-		"		Ignore NULL characters entirely when writing strings to ascii\n"
-		"		files. This is useful when writing files to be read in by\n"
-		"		programs that do not recognize null characters, e.g. sqlite\n"
-		"		databases.\n"
-		"\n"
-		"Examples:\n"
-		"    import numpy\n"
-		"    import records\n"
-		"    r = records.Open('test.csv', 'w', ',')\n"
-		"    r.Write(my_array)\n"
-		"\n"
-		""},
-	 { (char *)"Records_Close", _wrap_Records_Close, METH_VARARGS, (char *)"\n"
-		"\n"
-		"Close()\n"
-		"\n"
-		"If the file was opened locally, close the file pointer.\n"
-		"\n"
-		""},
-	 { (char *)"Records_write_string", (PyCFunction) _wrap_Records_write_string, METH_VARARGS | METH_KEYWORDS, (char *)"\n"
-		"\n"
-		"Close()\n"
-		"\n"
-		"If the file was opened locally, close the file pointer.\n"
-		"\n"
-		""},
-	 { (char *)"Records_update_row_count", (PyCFunction) _wrap_Records_update_row_count, METH_VARARGS | METH_KEYWORDS, (char *)"\n"
-		"\n"
-		"Close()\n"
-		"\n"
-		"If the file was opened locally, close the file pointer.\n"
-		"\n"
-		""},
+	 { (char *)"new_Records", (PyCFunction) _wrap_new_Records, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"delete_Records", _wrap_delete_Records, METH_VARARGS, NULL},
+	 { (char *)"Records_Read", (PyCFunction) _wrap_Records_Read, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_ReadSlice", (PyCFunction) _wrap_Records_ReadSlice, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_Write", (PyCFunction) _wrap_Records_Write, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_Close", _wrap_Records_Close, METH_VARARGS, NULL},
+	 { (char *)"Records_write_string", (PyCFunction) _wrap_Records_write_string, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_update_row_count", (PyCFunction) _wrap_Records_update_row_count, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_read_column", (PyCFunction) _wrap_Records_read_column, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_read_columns", (PyCFunction) _wrap_Records_read_columns, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_swigregister", Records_swigregister, METH_VARARGS, NULL},
 	 { NULL, NULL, 0, NULL }
 };

@@ -30,7 +30,7 @@ static char* get_unicode_as_string(PyObject* obj)
 {
     PyObject* tmp=NULL;
     char* strdata=NULL;
-    tmp = PyObject_CallMethod(obj,"encode",NULL);
+    tmp = PyObject_CallMethod(obj,(char*)"encode",NULL);
 
     strdata = strdup( PyBytes_AsString(tmp) );
     Py_XDECREF(tmp);
@@ -411,7 +411,6 @@ PyObject* Records::_read_text_column(PyObject* arrayobj,
     npy_intp nrows2read=0;
 	npy_intp current_row=0;
 	npy_intp row2read=0;
-    npy_int64 row=0;
 
 	char* buff=NULL;
 
@@ -475,9 +474,6 @@ PyObject* Records::_read_binary_column(PyObject* arrayobj,
     npy_intp nrows2read=0;
 	npy_intp current_row=0;
 	npy_intp row2read=0;
-    npy_int64 row=0;
-
-	char* buff=NULL;
 
     if (mFileType != BINARY_FILE) {
 		throw "attempt to read text data as binary";
@@ -531,7 +527,7 @@ PyObject* Records::read_column(PyObject* arrayobj,
 
 {
 
-    if (mFileType != BINARY_FILE) {
+    if (mFileType == BINARY_FILE) {
         return _read_binary_column(arrayobj, colnum, rows);
     } else {
         return _read_text_column(arrayobj, colnum, rows);
@@ -549,11 +545,12 @@ PyObject* Records::read_columns(PyObject* arrayobj,
 
 {
 
-    if (mFileType != BINARY_FILE) {
-        return _read_binary_columns(arrayobj, colnums, rows);
+    if (mFileType == BINARY_FILE) {
+        _read_binary_columns(arrayobj, colnums, rows);
     } else {
-        //return _read_text_columns(arrayobj, colnums, rows);
+        //_read_text_columns(arrayobj, colnums, rows);
     }
+    Py_RETURN_NONE;
 }
 
 
@@ -567,10 +564,7 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
         current_offset=0,
         row2read=0, col2read=0,
         seek_distance=0;
-
-    npy_int64 row=0;
-
-	char* buff=NULL;
+    long long colsize=0;
 
     ensure_readable();
 
@@ -595,6 +589,8 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
             row2read = *(npy_int64 *) PyArray_GETPTR1(rows, irow);
         }
 
+        //fprintf(stderr,"current_row: %ld row2read: %ld\n", current_row, row2read);
+
 		if (row2read > current_row) {
 			SkipRows(current_row, row2read);
 			current_row=row2read;
@@ -604,7 +600,9 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
         current_offset=0; // offset into this row
 
         for (npy_intp icol=0; icol<ncols2read; icol++) {
+            //fprintf(stderr,"col2read: %ld\n", col2read);
             col2read = *(npy_int64 *) PyArray_GETPTR1(colnums, icol);
+            colsize=mSizes[col2read];
 
             if (col2read > current_col) {
                 seek_distance = mOffsets[col2read] - current_offset;
@@ -617,10 +615,11 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
             read_from_binary_column(col2read, ptr);
 
             // account for offset after read
-            current_offset += mSizes[col2read];
+            current_offset += colsize;
 
-            // move the data pointer also
-            ptr += mSizes[col2read];
+            // move the data pointer also. Assumes C contiguous within
+            // a columns
+            ptr += colsize;
 
             current_col++;
         }

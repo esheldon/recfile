@@ -3865,6 +3865,48 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_Records_read_columns(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
+  PyObject *resultobj = 0;
+  Records *arg1 = (Records *) 0 ;
+  PyObject *arg2 = (PyObject *) 0 ;
+  PyObject *arg3 = (PyObject *) 0 ;
+  PyObject *arg4 = (PyObject *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
+  char *  kwnames[] = {
+    (char *) "self",(char *) "arrayobj",(char *) "colnums",(char *) "rows", NULL 
+  };
+  PyObject *result = 0 ;
+  
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOOO:Records_read_columns",kwnames,&obj0,&obj1,&obj2,&obj3)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_columns" "', argument " "1"" of type '" "Records *""'"); 
+  }
+  arg1 = reinterpret_cast< Records * >(argp1);
+  arg2 = obj1;
+  arg3 = obj2;
+  arg4 = obj3;
+  try {
+    result = (PyObject *)(arg1)->read_columns(arg2,arg3,arg4);
+  }
+  catch(char const *_e) {
+    PyErr_SetString(PyExc_RuntimeError, _e);
+    SWIG_fail;
+    
+  }
+  
+  resultobj = result;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *Records_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
   PyObject *obj;
   if (!PyArg_ParseTuple(args,(char*)"O:swigregister", &obj)) return NULL;
@@ -3883,6 +3925,7 @@ static PyMethodDef SwigMethods[] = {
 	 { (char *)"Records_write_string", (PyCFunction) _wrap_Records_write_string, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_update_row_count", (PyCFunction) _wrap_Records_update_row_count, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_read_column", (PyCFunction) _wrap_Records_read_column, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_read_columns", (PyCFunction) _wrap_Records_read_columns, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_swigregister", Records_swigregister, METH_VARARGS, NULL},
 	 { NULL, NULL, 0, NULL }
 };

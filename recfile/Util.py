@@ -7,6 +7,11 @@ import pprint
 
 from . import records
 
+try:
+    xrange=xrange
+except:
+    xrange=range
+
 # These are a bunch of docs pieces that can be pieced together
 
 _instantiate_docs="""
@@ -328,7 +333,8 @@ class Recfile(object):
             self.dtype = numpy.dtype(dtype)
             if self.is_ascii:
                 # we don't care about byte order for ascii
-                self.dtype = numpy.dtype(remove_dtype_byteorder(self.dtype))
+                nbo = remove_dtype_byteorder(self.dtype)
+                self.dtype = numpy.dtype(nbo)
 
             self.colnames = numpy.array(self.dtype.names)
             self.ncols = self.colnames.size
@@ -401,7 +407,10 @@ class Recfile(object):
         s += ["filename: '%s'" % self.filename]
         s += ["mode: '%s'" % self.mode]
         if self.delim is not None:
+            s += ['filetype: TEXT']
             s=["delim: '%s'" % self.delim]
+        else:
+            s += ['filetype: BINARY']
 
         s += ["nrows: %s" % self.nrows]
 
@@ -438,7 +447,7 @@ class Recfile(object):
         colnums = numpy.zeros(colnames.size, dtype='i8')
 
         for i in xrange(colnames.size):
-            colnums[i] = get_colnum(colnames[i])
+            colnums[i] = self.get_colnum(colnames[i])
 
         return numpy.unique( colnums )
 
@@ -521,7 +530,7 @@ class Recfile(object):
 
         if self.is_ascii:
             # we always use the same code for ascii
-            result = self.read_columns(colnums, rows=rows)
+            result = self._read_columns(colnums, rows)
         else:
             # we have specialized codes for binary
             if read_all_cols and read_all_rows:
@@ -532,9 +541,7 @@ class Recfile(object):
                 result = self.robj.read_binary_rows(rows)
 
             else:
-                # rows can still be zero
-                # read but a row subset and column subset
-                result = self.read_columns(colnums,rows=rows)
+                result = self._read_columns(colnums,rows)
 
         if isscalar:
             result = result[columns]
@@ -544,6 +551,38 @@ class Recfile(object):
         return result
 
     Read=read
+
+    def _read_columns(self, colnums, rows):
+        """
+        read a set of columns from the file, possibly a subset of the rows
+
+        parameters
+        ----------
+        colnums: string
+            string column numbes
+        rows: array, optional
+            Subset of rows to read
+        """
+
+        if self.robj is None:
+            raise ValueError("You have not yet opened a file")
+
+        if rows is not None:
+            nrows = rows.size
+        else:
+            nrows = self.nrows
+
+        dtype=[]
+        for colnum in colnums:
+            dtype.append( self.dtype.descr[colnum] )
+
+        data=numpy.zeros(nrows, dtype=dtype)
+
+        self.robj.read_columns(data,colnums,rows)
+
+        return data
+
+
 
     def write(self, data):
         """
@@ -888,20 +927,20 @@ class Recfile(object):
         if fields is None:
             return None, False
 
-        if numpy.isscalar(fields):
+        is_scalar=numpy.isscalar(fields)
+        if is_scalar:
             fields=[fields]
-            is_scalar=True
 
         if isinstance(fields, (list,numpy.ndarray)):
-            f=fields
+            f2read=fields
         elif isinstance(fields,tuple):
-            f=list(fields)
+            f2read=list(fields)
         elif isstring(fields):
-            f=fields
+            f2read=fields
         else:
             raise ValueError('fields must be list,tuple,string or array')
 
-        colnums = self.get_colnums(f)
+        colnums = self.get_colnums(f2read)
 
         return colnums, is_scalar
 
@@ -1593,7 +1632,7 @@ def remove_dtype_byteorder(dtype):
         else:
             dt = (dt[0], typestr)
 
-        newdt.append(newdt)
+        newdt.append(dt)
 
     return newdt
 
