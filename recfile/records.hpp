@@ -60,16 +60,10 @@ class Records {
 
 
         // new style
-
-        PyObject* read_column(PyObject* arrayobj,
-                              long colnum,
-                              PyObject* input_rows) throw (const char* );
-
         PyObject* read_columns(PyObject* arrayobj,
                                PyObject* colnums,
                                PyObject* rows) throw (const char* );
 
-        // this is only for binary
         PyObject* read_binary_slice(PyObject* arrayobj,
                                     long long row1,
                                     long long row2,
@@ -87,13 +81,6 @@ class Records {
         void read_ascii_bytes(long long colnum, char* buff);
         void read_from_text_column(long long colnum, char* buff);
         void read_from_binary_column(long long colnum, char* buff);
-
-        void read_binary_column(PyObject* arrayobj,
-                                long colnum,
-                                PyObject* input_rows) throw (const char* );
-        void read_text_column(PyObject* arrayobj,
-                              long colnum,
-                              PyObject* input_rows) throw (const char* );
 
         void read_binary_columns(PyObject* arrayobj,
                                  PyObject* colnums,

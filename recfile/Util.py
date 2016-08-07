@@ -455,40 +455,6 @@ class Recfile(object):
 
         return numpy.unique( colnums )
 
-    def read_column(self, colname, rows=None):
-        """
-        read a single column from the file, possibly a subset of the rows
-
-        parameters
-        ----------
-        colname: string
-            name of the column
-        rows: array, optional
-            Subset of rows to read
-        """
-
-        if self.robj is None:
-            raise ValueError("You have not yet opened a file")
-
-        if rows is not None:
-            rows = numpy.array(rows, dtype='i8', copy=False, ndmin=1)
-            nrows = rows.size
-        else:
-            nrows = self.nrows
-
-        colnum=self.get_colnum(colname)
-
-        dtype=[ self.dtype.descr[colnum] ]
-        tdata=numpy.zeros(nrows, dtype=dtype)
-
-        # we don't want the field name in here since we are reading
-        # a single column
-        data=tdata[colname]
-
-        self.robj.read_column(data,int(colnum),rows)
-
-        return data
-
     def read(self, rows=None, fields=None, columns=None,
              split=False, **keys):
         """
