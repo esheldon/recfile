@@ -69,7 +69,15 @@ class Records {
                                PyObject* colnums,
                                PyObject* rows) throw (const char* );
 
+        // this is only for binary
+        PyObject* read_binary_slice(PyObject* arrayobj,
+                                    long long row1,
+                                    long long row2,
+                                    long long step) throw (const char* );
+
     private:
+
+        void goto_offset(void);
 
         // new style
         npy_intp get_nrows_to_read(PyObject* rows);
@@ -80,26 +88,24 @@ class Records {
         void read_from_text_column(long long colnum, char* buff);
         void read_from_binary_column(long long colnum, char* buff);
 
-        PyObject* _read_binary_column(PyObject* arrayobj,
-                                      long colnum,
-                                      PyObject* input_rows) throw (const char* );
-        PyObject* _read_text_column(PyObject* arrayobj,
-                                    long colnum,
-                                    PyObject* input_rows) throw (const char* );
+        PyObject* read_binary_column(PyObject* arrayobj,
+                                     long colnum,
+                                     PyObject* input_rows) throw (const char* );
+        PyObject* read_text_column(PyObject* arrayobj,
+                                   long colnum,
+                                   PyObject* input_rows) throw (const char* );
 
-        PyObject* _read_binary_columns(PyObject* arrayobj,
-                                       long colnum,
-                                       PyObject* input_rows) throw (const char* );
-
-        PyObject* _read_binary_columns(PyObject* arrayobj,
-                                       PyObject* colnums,
-                                       PyObject* rows) throw (const char* );
+        PyObject* read_binary_columns(PyObject* arrayobj,
+                                      PyObject* colnums,
+                                      PyObject* rows) throw (const char* );
 
 		// Move this to public when needed for testing
         PyObject* Test();
 
         void ensure_writable(void) throw (const char* );
         void ensure_readable(void) throw (const char* );
+        void ensure_binary(void) throw (const char* );
+        void ensure_text(void) throw (const char* );
 
 
 		// Initialize member variables

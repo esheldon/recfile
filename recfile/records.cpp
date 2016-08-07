@@ -132,9 +132,7 @@ Records::Records(
             mAction |= WRITE;
         }
 
-        if (offset > 0) {
-            fseek(mFptr, offset, SEEK_SET);
-        }
+        goto_offset();
 
 		ProcessDescr(dtype);
 		ProcessNrows(nrows);
@@ -218,13 +216,18 @@ void Records::InitializeVariables()
 
 }
 
+
+void Records::goto_offset(void)
+{
+    fseek(mFptr, mFileOffset, SEEK_SET);
+}
+
 PyObject* Records::ReadSlice(long long row1, long long row2, long long step)  throw (const char* )
 {
     ensure_readable();
 
     // always start at the users requested offset
-    fseek(mFptr, mFileOffset, SEEK_SET);
-
+    goto_offset();
 
 	// juse some error checking and return implied length
 	mNrowsToRead = ProcessSlice(row1, row2, step);
@@ -251,7 +254,7 @@ PyObject* Records::Read(
 {
     ensure_readable();
 
-    fseek(mFptr, mFileOffset, SEEK_SET);
+    goto_offset();
 
 	ProcessRowsToRead(rows);
 	ProcessFieldsToRead(fields);
@@ -403,9 +406,9 @@ npy_intp Records::get_ncols_to_read(PyObject* colnums)
 /*
    read a single column
 */
-PyObject* Records::_read_text_column(PyObject* arrayobj,
-                                     long colnum,
-                                     PyObject* rows) throw (const char* )
+PyObject* Records::read_text_column(PyObject* arrayobj,
+                                    long colnum,
+                                    PyObject* rows) throw (const char* )
 {
     bool doall=false;
     npy_intp nrows2read=0;
@@ -414,11 +417,8 @@ PyObject* Records::_read_text_column(PyObject* arrayobj,
 
 	char* buff=NULL;
 
-    if (mFileType != ASCII_FILE) {
-		throw "attempt to read binary data as text";
-    }
-
     ensure_readable();
+    ensure_text();
 
     nrows2read = get_nrows_to_read(rows);
 
@@ -428,7 +428,7 @@ PyObject* Records::_read_text_column(PyObject* arrayobj,
         doall=true;
     }
 
-    fseek(mFptr, mFileOffset, SEEK_SET);
+    goto_offset();
 
 	MakeScanFormats(true);
 
@@ -466,20 +466,17 @@ PyObject* Records::_read_text_column(PyObject* arrayobj,
 }
 
 
-PyObject* Records::_read_binary_column(PyObject* arrayobj,
-                                       long colnum,
-                                       PyObject* rows) throw (const char* )
+PyObject* Records::read_binary_column(PyObject* arrayobj,
+                                      long colnum,
+                                      PyObject* rows) throw (const char* )
 {
     bool doall=false;
     npy_intp nrows2read=0;
 	npy_intp current_row=0;
 	npy_intp row2read=0;
 
-    if (mFileType != BINARY_FILE) {
-		throw "attempt to read text data as binary";
-    }
-
     ensure_readable();
+    ensure_binary();
 
     nrows2read = get_nrows_to_read(rows);
 
@@ -489,7 +486,7 @@ PyObject* Records::_read_binary_column(PyObject* arrayobj,
         doall=true;
     }
 
-    fseek(mFptr, mFileOffset, SEEK_SET);
+    goto_offset();
 
     // For binary, go ahead and skip to the start of this field in the file
     DoSeek(mOffsets[colnum]);
@@ -528,15 +525,19 @@ PyObject* Records::read_column(PyObject* arrayobj,
 {
 
     if (mFileType == BINARY_FILE) {
-        return _read_binary_column(arrayobj, colnum, rows);
+        return read_binary_column(arrayobj, colnum, rows);
     } else {
-        return _read_text_column(arrayobj, colnum, rows);
+        return read_text_column(arrayobj, colnum, rows);
     }
 }
-/*
-   read multiple columns
 
-   colnums must be of type npy_int64, and must be unique
+/*
+
+   subsets of rows and columns
+
+   colnums and rows must be of type npy_int64, and must be unique
+   and sorted
+
 */
 
 PyObject* Records::read_columns(PyObject* arrayobj,
@@ -546,7 +547,7 @@ PyObject* Records::read_columns(PyObject* arrayobj,
 {
 
     if (mFileType == BINARY_FILE) {
-        _read_binary_columns(arrayobj, colnums, rows);
+        read_binary_columns(arrayobj, colnums, rows);
     } else {
         //_read_text_columns(arrayobj, colnums, rows);
     }
@@ -554,9 +555,9 @@ PyObject* Records::read_columns(PyObject* arrayobj,
 }
 
 
-PyObject* Records::_read_binary_columns(PyObject* arrayobj,
-                                        PyObject* colnums,
-                                        PyObject* rows) throw (const char* )
+PyObject* Records::read_binary_columns(PyObject* arrayobj,
+                                       PyObject* colnums,
+                                       PyObject* rows) throw (const char* )
 {
     bool doall_rows=false;
 	npy_intp
@@ -577,7 +578,7 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
         doall_rows=true;
     }
 
-    fseek(mFptr, mFileOffset, SEEK_SET);
+    goto_offset();
 
 
     for (npy_intp irow=0; irow<nrows2read; irow++) {
@@ -632,6 +633,64 @@ PyObject* Records::_read_binary_columns(PyObject* arrayobj,
 
         current_row++ ;
     }
+
+    Py_RETURN_NONE;
+}
+
+
+/*
+
+   read all columns in a row slice
+
+   binary only; there is only one text reader for
+   all reading types
+
+   the input array must have the right size
+*/
+
+PyObject* Records::read_binary_slice(PyObject* arrayobj,
+                                     long long row1,
+                                     long long row2,
+                                     long long step) throw (const char* )
+{
+
+    ensure_readable();
+    ensure_binary();
+
+	npy_intp nrows2read = ProcessSlice(row1, row2, step);
+
+    // always begin at the user's requested file offset
+    goto_offset();
+
+    if (row1 > 0) {
+		SkipBinaryRows(row1);
+    }
+
+    if (step==1) {
+        // we can use a single fread
+        void *ptr = PyArray_GETPTR1(arrayobj, 0);
+
+        npy_intp nread = (npy_intp) fread(ptr, mRowSize, nrows2read, mFptr);
+        if (nread != nrows2read) {
+            throw "Error reading slice";
+        } 
+
+    } else {
+
+        for (npy_intp irow=0; irow<nrows2read; irow++) {
+
+            void *ptr = PyArray_GETPTR1(arrayobj, irow);
+
+            size_t nread = fread(ptr, mRowSize, 1, mFptr);
+            if (nread != 1) {
+                throw "Failed to read row data";
+            }
+
+            SkipBinaryRows(step-1);
+
+        }
+    }
+
 
     Py_RETURN_NONE;
 }
@@ -1038,6 +1097,20 @@ void Records::ensure_readable(void) throw (const char* )
 		throw "File is not open for reading";
 	}
 }
+
+void Records::ensure_binary(void) throw (const char* )
+{
+    if (mFileType != BINARY_FILE) {
+		throw "attempt to read ascii data as binary";
+    }
+}
+void Records::ensure_text(void) throw (const char* )
+{
+    if (mFileType != ASCII_FILE) {
+		throw "attempt to read binary data as text";
+    }
+}
+
 
 
 /*

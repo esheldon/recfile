@@ -160,7 +160,6 @@ class TestReadWrite(unittest.TestCase):
         fname=tempfile.mktemp(prefix=prefix,suffix='.rec')
         return fname
 
-    '''
     def testWriteRead(self):
         """
         Test a basic table write, data and a header, then reading back in to
@@ -169,7 +168,8 @@ class TestReadWrite(unittest.TestCase):
 
         dtype=self.data.dtype
         nrows=self.data.size
-        for delim in [None,",", ":","\t", " "]:
+        #for delim in [None,",", ":","\t", " "]:
+        for delim in [None]:
 
             try:
                 fname=self._get_testfile("testWriteRead",delim)
@@ -198,7 +198,7 @@ class TestReadWrite(unittest.TestCase):
             finally:
                 if os.path.exists(fname):
                     os.remove(fname)
-    '''
+
 
     def testSubsets(self):
         """
@@ -221,17 +221,16 @@ class TestReadWrite(unittest.TestCase):
 
                 with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
 
-                    #print(robj)
-                    #d=robj.read(columns='f4vec')
-                    #d=robj.read()
-                    """
-                    # range of rows
-                    d=robj[:]
-                    self.compare_rec(self.data, d, "row range all")
+                    # row slices
+                    if delim is None:
+                        d=robj[:]
+                        self.compare_rec(self.data, d, "row range all")
 
-                    d=robj[1:3]
-                    self.compare_rec(self.data[1:3], d, "row range")
-                    """
+                        d=robj[1:3]
+                        self.compare_rec(self.data[1:3], d, "row range")
+
+                        d=robj[0:4:2]
+                        self.compare_rec(self.data[0:4:2], d, "row range step 2")
 
                     # test reading single columns
                     for f in self.data.dtype.names:

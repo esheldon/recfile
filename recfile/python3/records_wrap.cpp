@@ -3907,6 +3907,69 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_Records_read_binary_slice(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
+  PyObject *resultobj = 0;
+  Records *arg1 = (Records *) 0 ;
+  PyObject *arg2 = (PyObject *) 0 ;
+  long long arg3 ;
+  long long arg4 ;
+  long long arg5 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  long long val3 ;
+  int ecode3 = 0 ;
+  long long val4 ;
+  int ecode4 = 0 ;
+  long long val5 ;
+  int ecode5 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
+  PyObject * obj4 = 0 ;
+  char *  kwnames[] = {
+    (char *) "self",(char *) "arrayobj",(char *) "row1",(char *) "row2",(char *) "step", NULL 
+  };
+  PyObject *result = 0 ;
+  
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OOOOO:Records_read_binary_slice",kwnames,&obj0,&obj1,&obj2,&obj3,&obj4)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_read_binary_slice" "', argument " "1"" of type '" "Records *""'"); 
+  }
+  arg1 = reinterpret_cast< Records * >(argp1);
+  arg2 = obj1;
+  ecode3 = SWIG_AsVal_long_SS_long(obj2, &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "Records_read_binary_slice" "', argument " "3"" of type '" "long long""'");
+  } 
+  arg3 = static_cast< long long >(val3);
+  ecode4 = SWIG_AsVal_long_SS_long(obj3, &val4);
+  if (!SWIG_IsOK(ecode4)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode4), "in method '" "Records_read_binary_slice" "', argument " "4"" of type '" "long long""'");
+  } 
+  arg4 = static_cast< long long >(val4);
+  ecode5 = SWIG_AsVal_long_SS_long(obj4, &val5);
+  if (!SWIG_IsOK(ecode5)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode5), "in method '" "Records_read_binary_slice" "', argument " "5"" of type '" "long long""'");
+  } 
+  arg5 = static_cast< long long >(val5);
+  try {
+    result = (PyObject *)(arg1)->read_binary_slice(arg2,arg3,arg4,arg5);
+  }
+  catch(char const *_e) {
+    PyErr_SetString(PyExc_RuntimeError, _e);
+    SWIG_fail;
+    
+  }
+  
+  resultobj = result;
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *Records_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
   PyObject *obj;
   if (!PyArg_ParseTuple(args,(char*)"O:swigregister", &obj)) return NULL;
@@ -3926,6 +3989,7 @@ static PyMethodDef SwigMethods[] = {
 	 { (char *)"Records_update_row_count", (PyCFunction) _wrap_Records_update_row_count, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_read_column", (PyCFunction) _wrap_Records_read_column, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_read_columns", (PyCFunction) _wrap_Records_read_columns, METH_VARARGS | METH_KEYWORDS, NULL},
+	 { (char *)"Records_read_binary_slice", (PyCFunction) _wrap_Records_read_binary_slice, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_swigregister", Records_swigregister, METH_VARARGS, NULL},
 	 { NULL, NULL, 0, NULL }
 };

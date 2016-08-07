@@ -1,3 +1,12 @@
+"""
+TODO
+    - read binary slice
+    - read ascii slice
+        - just use standard reader?  Yes I think.
+    - read rows binary
+    - read_ascii_columns
+    - different endianness tests
+"""
 from __future__ import print_function
 import numpy
 import sys
@@ -534,7 +543,7 @@ class Recfile(object):
         else:
             # we have specialized codes for binary
             if read_all_cols and read_all_rows:
-                result = self.robj.read_all_binary()
+                result = self._read_binary_slice(slice(0,self.nrows,1))
 
             elif read_all_cols:
                 # read some row subset
@@ -572,9 +581,12 @@ class Recfile(object):
         else:
             nrows = self.nrows
 
-        dtype=[]
-        for colnum in colnums:
-            dtype.append( self.dtype.descr[colnum] )
+        if colnums is not None:
+            dtype=[]
+            for colnum in colnums:
+                dtype.append( self.dtype.descr[colnum] )
+        else:
+            dtype=self.dtype
 
         data=numpy.zeros(nrows, dtype=dtype)
 
@@ -648,36 +660,62 @@ class Recfile(object):
         if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
-        res, isrows, isslice = self.process_args_as_rows_or_columns(arg)
+        if self.is_ascii:
+            unpack=True
+        else:
+            unpack=False
+
+        res, isrows, isslice = self.process_args_as_rows_or_columns(arg, unpack=unpack)
         if isrows:
             # rows were entered: read all columns
             if isslice:
-                return self.read_slice(res)
+                return self._read_binary_slice(res)
             else:
-                return self.read(rows=res)
+                rows=res
+                return self.read(rows=rows)
+        else:
+            # columns was entered.  Return a subset objects
+            return RecfileColumnSubset(self, columns=res)
 
-        # columns was entered.  Return a subset objects
-        return RecfileColumnSubset(self, columns=res)
+    def _get_slice_nrows(self, arg):
+        """
+        we have already done error checking on the slice
+        """
 
-    def read_slice(self, arg, split=False):
+        rowdiff = arg.stop-arg.start
+        extra = 0
+        if (rowdiff % arg.step) != 0:
+            extra = 1
+
+        nrows = rowdiff//arg.step + extra
+
+        return nrows
+
+    def _read_binary_slice(self, arg, split=False):
         """
         read a slice of rows
+
+        we have already done error checking on the slice
         """
         if self.robj is None:
             raise ValueError("You have not yet opened a file")
 
-        result = self.robj.ReadSlice(
+        nrows = self._get_slice_nrows(arg)
+
+        data = numpy.zeros(nrows, dtype=self.dtype)
+
+        self.robj.read_binary_slice(
+            data,
             int(arg.start),
             int(arg.stop),
             int(arg.step),
         )
 
         if split:
-            return split_fields(result)
+            return split_fields(data)
         else:
-            return result
+            return data
 
-        return result
 
     def get_memmap(self, **keys):
         """
@@ -860,11 +898,11 @@ class Recfile(object):
 
         tstart = self._fix_range(start)
         tstop  = self._fix_range(stop)
-        if tstart == 0 and tstop == self.nrows:
-            # this is faster: if all fields are also requested, then a 
-            # single fread will be done
-            return None
-        if stop < start:
+        #if tstart == 0 and tstop == self.nrows:
+        #    # this is faster: if all fields are also requested, then a 
+        #    # single fread will be done
+        #    return None
+        if tstop < tstart:
             raise ValueError("start is greater than stop in slice")
         return numpy.arange(tstart, tstop, step, dtype='i8')
 

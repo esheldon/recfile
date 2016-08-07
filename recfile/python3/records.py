@@ -129,6 +129,9 @@ class Records(_object):
 
     def read_columns(self, arrayobj, colnums, rows):
         return _records.Records_read_columns(self, arrayobj, colnums, rows)
+
+    def read_binary_slice(self, arrayobj, row1, row2, step):
+        return _records.Records_read_binary_slice(self, arrayobj, row1, row2, step)
 Records_swigregister = _records.Records_swigregister
 Records_swigregister(Records)
 
