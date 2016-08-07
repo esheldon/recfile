@@ -106,11 +106,11 @@ class Records(_object):
     __swig_destroy__ = _records.delete_Records
     __del__ = lambda self: None
 
-    def Write(self, obj):
-        return _records.Records_Write(self, obj)
-
     def close(self):
         return _records.Records_close(self)
+
+    def Write(self, obj):
+        return _records.Records_Write(self, obj)
 
     def write_string(self, obj):
         return _records.Records_write_string(self, obj)

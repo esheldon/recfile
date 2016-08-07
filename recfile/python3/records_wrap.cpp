@@ -3571,6 +3571,35 @@ fail:
 }
 
 
+SWIGINTERN PyObject *_wrap_Records_close(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  Records *arg1 = (Records *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:Records_close",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_close" "', argument " "1"" of type '" "Records *""'"); 
+  }
+  arg1 = reinterpret_cast< Records * >(argp1);
+  try {
+    (arg1)->close();
+  }
+  catch(char const *_e) {
+    PyErr_SetString(PyExc_RuntimeError, _e);
+    SWIG_fail;
+    
+  }
+  
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 SWIGINTERN PyObject *_wrap_Records_Write(PyObject *SWIGUNUSEDPARM(self), PyObject *args, PyObject *kwargs) {
   PyObject *resultobj = 0;
   Records *arg1 = (Records *) 0 ;
@@ -3601,35 +3630,6 @@ SWIGINTERN PyObject *_wrap_Records_Write(PyObject *SWIGUNUSEDPARM(self), PyObjec
   }
   
   resultobj = result;
-  return resultobj;
-fail:
-  return NULL;
-}
-
-
-SWIGINTERN PyObject *_wrap_Records_close(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
-  PyObject *resultobj = 0;
-  Records *arg1 = (Records *) 0 ;
-  void *argp1 = 0 ;
-  int res1 = 0 ;
-  PyObject * obj0 = 0 ;
-  
-  if (!PyArg_ParseTuple(args,(char *)"O:Records_close",&obj0)) SWIG_fail;
-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_close" "', argument " "1"" of type '" "Records *""'"); 
-  }
-  arg1 = reinterpret_cast< Records * >(argp1);
-  try {
-    (arg1)->close();
-  }
-  catch(char const *_e) {
-    PyErr_SetString(PyExc_RuntimeError, _e);
-    SWIG_fail;
-    
-  }
-  
-  resultobj = SWIG_Py_Void();
   return resultobj;
 fail:
   return NULL;
@@ -3830,8 +3830,8 @@ static PyMethodDef SwigMethods[] = {
 	 { (char *)"SWIG_PyInstanceMethod_New", (PyCFunction)SWIG_PyInstanceMethod_New, METH_O, NULL},
 	 { (char *)"new_Records", (PyCFunction) _wrap_new_Records, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"delete_Records", _wrap_delete_Records, METH_VARARGS, NULL},
-	 { (char *)"Records_Write", (PyCFunction) _wrap_Records_Write, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_close", _wrap_Records_close, METH_VARARGS, NULL},
+	 { (char *)"Records_Write", (PyCFunction) _wrap_Records_Write, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_write_string", (PyCFunction) _wrap_Records_write_string, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_update_row_count", (PyCFunction) _wrap_Records_update_row_count, METH_VARARGS | METH_KEYWORDS, NULL},
 	 { (char *)"Records_read_columns", (PyCFunction) _wrap_Records_read_columns, METH_VARARGS | METH_KEYWORDS, NULL},

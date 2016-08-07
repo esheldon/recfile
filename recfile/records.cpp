@@ -119,9 +119,9 @@ Records::Records(
 
 	mMode=mode;
 
-	GetFptr(filename, mMode.c_str());
-	ProcessDelim(delimobj);
-	SetFileType();
+	set_fptr(filename, mMode.c_str());
+	process_delim(delimobj);
+	set_file_type();
 
     mFileOffset = offset;
 
@@ -158,13 +158,6 @@ Records::~Records()
 	// always decref; can be NULL but otherwise points to an input
 	// type descriptor and we did an INCREF
 	Py_XDECREF(mTypeDescr);
-
-	// Always decref.  Either null or a new reference to mTypeDescr
-	Py_XDECREF(mKeepTypeDescr);
-
-	// This may or may not be a copy, but we must decref 
-	Py_XDECREF(mRowsToRead);
-
 	this->close();
 
 }
@@ -182,20 +175,10 @@ void Records::close() throw (const char*)
 void Records::init_variables()
 {
 
-	// First initialize all those pointers.  We must do this in case they
-	// need to be decrefed; it will always decred if they are not null.
 
 	// The type descriptor for each row of the file.  Will decref since we
 	// increfed as we made a copy
 	mTypeDescr=NULL;
-
-	// Optional rows to read, default to all.  Using pyarray_converter in args,
-	// so must DECREF this before returning.
-	mRowsToRead=NULL;
-
-	// The return object and data area pointer
-	mReturnObject=NULL;
-	mData=NULL;
 
 	mFptr=NULL;
 
@@ -208,14 +191,10 @@ void Records::init_variables()
 
 	mReadAsWhitespace=false;
 
-	// Keep field stuff
-	mKeepTypeDescr=NULL;
-
-	mKeepNfields=0;
-
 	mNrows=0;
-	mNrowsToRead=0;
 
+    mIgnoreNull=false;
+    mPadNull=false;
     mBracketArrays=0;
 	return;
 
@@ -1848,7 +1827,7 @@ void Records::process_descriptor(PyObject* descr)
 }
 
 
-void Records::GetFptr(const char *filename, const char* mode)
+void Records::set_fptr(const char *filename, const char* mode)
 {
 	if (mDebug) debugout("Getting fptr");
 
@@ -1862,7 +1841,7 @@ void Records::GetFptr(const char *filename, const char* mode)
 
 }
 
-void Records::ProcessDelim(PyObject* delim_obj)
+void Records::process_delim(PyObject* delim_obj)
 {
 	if (delim_obj == NULL || delim_obj == Py_None) {
 		mDelim="";
@@ -1890,7 +1869,7 @@ void Records::ProcessDelim(PyObject* delim_obj)
 	if (mDebug) {cerr<<"Using delim = \""<<mDelim<<"\""<<endl; fflush(stdout);}
 }
 
-void Records::SetFileType()
+void Records::set_file_type()
 {
 	if (mDelim == "") {
 		mFileType = BINARY_FILE;
