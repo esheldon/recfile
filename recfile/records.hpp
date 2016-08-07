@@ -88,16 +88,21 @@ class Records {
         void read_from_text_column(long long colnum, char* buff);
         void read_from_binary_column(long long colnum, char* buff);
 
-        PyObject* read_binary_column(PyObject* arrayobj,
-                                     long colnum,
-                                     PyObject* input_rows) throw (const char* );
-        PyObject* read_text_column(PyObject* arrayobj,
-                                   long colnum,
-                                   PyObject* input_rows) throw (const char* );
+        void read_binary_column(PyObject* arrayobj,
+                                long colnum,
+                                PyObject* input_rows) throw (const char* );
+        void read_text_column(PyObject* arrayobj,
+                              long colnum,
+                              PyObject* input_rows) throw (const char* );
 
-        PyObject* read_binary_columns(PyObject* arrayobj,
-                                      PyObject* colnums,
-                                      PyObject* rows) throw (const char* );
+        void read_binary_columns(PyObject* arrayobj,
+                                 PyObject* colnums,
+                                 PyObject* rows) throw (const char* );
+        void skip_ascii_col_range(npy_intp start, npy_intp stop);
+        void read_text_columns(PyObject* arrayobj,
+                               PyObject* colnums,
+                               PyObject* rows) throw (const char* );
+
 
 		// Move this to public when needed for testing
         PyObject* Test();
@@ -140,8 +145,8 @@ class Records {
 		void SkipAsciiRows(long long nskip);
 		void SkipBinaryRows(long long nskip);
 
-		void MakeScanFormats(bool add_delim);
-		void MakePrintFormats();
+		void MakeScanFormats(vector<string> &formats, bool add_delim);
+		void MakePrintFormats(vector<string> &formats);
 
 		void SubDtype(
 				PyObject* descr, 

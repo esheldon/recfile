@@ -1,10 +1,6 @@
 """
 TODO
-    - read ascii slice
-        - just use standard reader?  Yes I think.
-    - read rows binary
-    - read_ascii_columns
-    - different endianness tests
+    - bools, complex (should work for binary)
 """
 from __future__ import print_function
 import numpy
@@ -765,10 +761,11 @@ class Recfile(object):
             pass
         elif isinstance(arg, slice):
             isrows=True
-            isslice=True
             if unpack:
+                isslice=False
                 result = self.slice2rows(arg.start, arg.stop, arg.step)
             else:
+                isslice=True
                 result = self.process_slice(arg)
         else:
             # a single object was entered.  Probably should apply some more 

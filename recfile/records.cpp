@@ -136,10 +136,14 @@ Records::Records(
 
 		ProcessDescr(dtype);
 		ProcessNrows(nrows);
+
 	} else {
 		// Only opened for writing
 		mAction=WRITE;
 	}
+
+    MakeScanFormats(mScanFormats,true);
+    MakePrintFormats(mPrintFormats);
 
 }
 
@@ -406,9 +410,9 @@ npy_intp Records::get_ncols_to_read(PyObject* colnums)
 /*
    read a single column
 */
-PyObject* Records::read_text_column(PyObject* arrayobj,
-                                    long colnum,
-                                    PyObject* rows) throw (const char* )
+void Records::read_text_column(PyObject* arrayobj,
+                               long colnum,
+                               PyObject* rows) throw (const char* )
 {
     bool doall=false;
     npy_intp nrows2read=0;
@@ -430,7 +434,6 @@ PyObject* Records::read_text_column(PyObject* arrayobj,
 
     goto_offset();
 
-	MakeScanFormats(true);
 
     for (npy_intp irow=0; irow<nrows2read; irow++) {
         if (doall) {
@@ -462,13 +465,12 @@ PyObject* Records::read_text_column(PyObject* arrayobj,
         current_row++ ;
     }
 
-    Py_RETURN_NONE;
 }
 
 
-PyObject* Records::read_binary_column(PyObject* arrayobj,
-                                      long colnum,
-                                      PyObject* rows) throw (const char* )
+void Records::read_binary_column(PyObject* arrayobj,
+                                 long colnum,
+                                 PyObject* rows) throw (const char* )
 {
     bool doall=false;
     npy_intp nrows2read=0;
@@ -515,7 +517,6 @@ PyObject* Records::read_binary_column(PyObject* arrayobj,
         current_row++ ;
     }
 
-    Py_RETURN_NONE;
 }
 
 PyObject* Records::read_column(PyObject* arrayobj,
@@ -525,10 +526,11 @@ PyObject* Records::read_column(PyObject* arrayobj,
 {
 
     if (mFileType == BINARY_FILE) {
-        return read_binary_column(arrayobj, colnum, rows);
+        read_binary_column(arrayobj, colnum, rows);
     } else {
-        return read_text_column(arrayobj, colnum, rows);
+        read_text_column(arrayobj, colnum, rows);
     }
+    Py_RETURN_NONE;
 }
 
 /*
@@ -549,15 +551,105 @@ PyObject* Records::read_columns(PyObject* arrayobj,
     if (mFileType == BINARY_FILE) {
         read_binary_columns(arrayobj, colnums, rows);
     } else {
-        //_read_text_columns(arrayobj, colnums, rows);
+        read_text_columns(arrayobj, colnums, rows);
     }
     Py_RETURN_NONE;
 }
 
 
-PyObject* Records::read_binary_columns(PyObject* arrayobj,
-                                       PyObject* colnums,
-                                       PyObject* rows) throw (const char* )
+// stop is exclusive
+void Records::skip_ascii_col_range(npy_intp start, npy_intp stop)
+{
+    for (npy_intp col=start; col<stop; col++) {
+        read_from_text_column(col, NULL);
+    }
+}
+
+void Records::read_text_columns(PyObject* arrayobj,
+                                     PyObject* colnums,
+                                     PyObject* rows) throw (const char* )
+{
+    bool doall_rows=false, doall_cols=false;
+	npy_intp
+        current_row=0, current_col=0,
+        row2read=0, col2read=0;
+
+    ensure_readable();
+    ensure_text();
+
+    npy_intp ncols2read = get_ncols_to_read(colnums);
+    npy_intp nrows2read = get_nrows_to_read(rows);
+
+	if (nrows2read != mNrows) {
+        doall_rows=false;
+    } else {
+        doall_rows=true;
+    }
+	if (ncols2read != mNfields) {
+        doall_cols=false;
+    } else {
+        doall_cols=true;
+    }
+
+    //cerr<<"doall rows: "<<doall_rows<<" doall cols: "<<doall_cols<<"\n";
+
+    // always begin at the user's requested file offset
+    goto_offset();
+
+    for (npy_intp irow=0; irow<nrows2read; irow++) {
+        char *ptr= (char *) PyArray_GETPTR1(arrayobj, irow);
+
+        if (doall_rows) {
+            row2read = irow;
+        } else {
+            row2read = *(npy_int64 *) PyArray_GETPTR1(rows, irow);
+            if (row2read > current_row) {
+                SkipRows(current_row, row2read);
+                current_row=row2read;
+            } 
+        }
+
+        current_col=0;
+
+        for (npy_intp icol=0; icol<ncols2read; icol++) {
+            if (doall_cols) {
+                col2read=icol;
+            } else {
+                col2read = *(npy_int64 *) PyArray_GETPTR1(colnums, icol);
+            }
+
+            if (col2read > current_col) {
+                skip_ascii_col_range(current_col, col2read);
+                current_col=col2read;
+            } 
+
+            read_from_text_column(col2read, ptr);
+
+            // move the data pointer. Assumes C contiguous within a column
+
+            ptr += mSizes[col2read];
+
+            // move the current col to the next one to indicate we have moved
+            // in the file passed the requested column
+            current_col++;
+
+        }
+
+        // skip the rest of the row if needed
+        if (current_col < mNfields) {
+            skip_ascii_col_range(current_col, mNfields);
+        }
+
+        current_row++ ;
+    }
+
+}
+
+
+
+void Records::read_binary_columns(PyObject* arrayobj,
+                                  PyObject* colnums,
+                                  PyObject* rows) throw (const char* )
 {
     bool doall_rows=false;
 	npy_intp
@@ -568,6 +660,7 @@ PyObject* Records::read_binary_columns(PyObject* arrayobj,
     long long colsize=0;
 
     ensure_readable();
+    ensure_binary();
 
     npy_intp ncols2read = get_ncols_to_read(colnums);
     npy_intp nrows2read = get_nrows_to_read(rows);
@@ -578,8 +671,8 @@ PyObject* Records::read_binary_columns(PyObject* arrayobj,
         doall_rows=true;
     }
 
+    // always begin at the user's requested file offset
     goto_offset();
-
 
     for (npy_intp irow=0; irow<nrows2read; irow++) {
         char *ptr= (char *) PyArray_GETPTR1(arrayobj, irow);
@@ -634,7 +727,6 @@ PyObject* Records::read_binary_columns(PyObject* arrayobj,
         current_row++ ;
     }
 
-    Py_RETURN_NONE;
 }
 
 
@@ -714,7 +806,7 @@ void Records::ReadPrepare()
 
 		mReadWholeRowBinary = true;
 	} else if (mFileType == ASCII_FILE) {
-		MakeScanFormats(true);
+		//MakeScanFormats(true);
 	}
 }
 
@@ -1214,8 +1306,6 @@ void Records::WriteRows()
 		cerr<<"Writing "<<mNrows<<" rows as ASCII"<<endl;
 		fflush(stdout);
 	}
-	if (mDebug) DebugOut("Making print formats");
-	MakePrintFormats();
 	if (mDebug) DebugOut("Writing rows");
 	for (long long row=0; row< mNrows; row++) {
 		for (long long fnum=0; fnum< mNfields; fnum++) {
@@ -1947,9 +2037,6 @@ PyObject* Records::Test()
 	char* p;
 
 
-	printf("Trying WriteNumberAsAscii()\n\n");
-	MakePrintFormats();
-
 
 	printf("\n\ti32 = ");
 	p = (char *) &i32;
@@ -2113,40 +2200,40 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 }
 
 
-void Records::MakeScanFormats(bool add_delim)
+void Records::MakeScanFormats(vector<string> &formats, bool add_delim)
 {
 
-	mScanFormats.clear();
+	formats.clear();
 	int nf=24;
-	mScanFormats.resize(nf, "%");
+	formats.resize(nf, "%");
 
-	mScanFormats[NPY_INT8] += NPY_INT8_FMT;
-	mScanFormats[NPY_UINT8] += NPY_UINT8_FMT;
+	formats[NPY_INT8] += NPY_INT8_FMT;
+	formats[NPY_UINT8] += NPY_UINT8_FMT;
 	
-	mScanFormats[NPY_INT16] += NPY_INT16_FMT;
-	mScanFormats[NPY_UINT16] += NPY_UINT16_FMT;
+	formats[NPY_INT16] += NPY_INT16_FMT;
+	formats[NPY_UINT16] += NPY_UINT16_FMT;
 
-	mScanFormats[NPY_INT32] += NPY_INT32_FMT;
-	mScanFormats[NPY_UINT32] += NPY_UINT32_FMT;
+	formats[NPY_INT32] += NPY_INT32_FMT;
+	formats[NPY_UINT32] += NPY_UINT32_FMT;
 
-	mScanFormats[NPY_INT64] += NPY_INT64_FMT;
-	mScanFormats[NPY_UINT64] += NPY_UINT64_FMT;
+	formats[NPY_INT64] += NPY_INT64_FMT;
+	formats[NPY_UINT64] += NPY_UINT64_FMT;
 
 #ifdef NPY_INT128
-	mScanFormats[NPY_INT128] += NPY_INT128_FMT;
-	mScanFormats[NPY_UINT128] += NPY_UINT128_FMT;
+	formats[NPY_INT128] += NPY_INT128_FMT;
+	formats[NPY_UINT128] += NPY_UINT128_FMT;
 #endif
 #ifdef NPY_INT256
-	mScanFormats[NPY_INT256] += NPY_INT256_FMT;
-	mScanFormats[NPY_UINT256] += NPY_UINT256_FMT;
+	formats[NPY_INT256] += NPY_INT256_FMT;
+	formats[NPY_UINT256] += NPY_UINT256_FMT;
 #endif
 
 	// They put %g for these..!!??
-	mScanFormats[NPY_FLOAT] += "f";
-	mScanFormats[NPY_DOUBLE] += "lf";
+	formats[NPY_FLOAT] += "f";
+	formats[NPY_DOUBLE] += "lf";
 
 #ifdef NPY_LONGDOUBLE
-	mScanFormats[NPY_LONGDOUBLE] += "Lf";
+	formats[NPY_LONGDOUBLE] += "Lf";
 #endif
 
 	// The types for long long integers are incorrect in the
@@ -2154,37 +2241,34 @@ void Records::MakeScanFormats(bool add_delim)
 	// We need to loop over and fix this since we don't know ahead
 	// of time on this platform which is the lld type
 	for (int i=0; i<nf; i++) {
-		if (mScanFormats[i] == "%Ld") {
-			mScanFormats[i] = "%lld";
+		if (formats[i] == "%Ld") {
+			formats[i] = "%lld";
 		}
-		if (mScanFormats[i] == "%Lu") {
-			mScanFormats[i] = "%llu";
+		if (formats[i] == "%Lu") {
+			formats[i] = "%llu";
 		}
 	}
 
 	// Only add in the 
 	if ((!mReadAsWhitespace) && (add_delim) ) {
 		for (int i=0; i<nf; i++) {
-			if (mScanFormats[i] != "%") {
-				mScanFormats[i] += ' '+mDelim;
+			if (formats[i] != "%") {
+				formats[i] += ' '+mDelim;
 			}
 		}
 	}
 }
 
-void Records::MakePrintFormats()
+void Records::MakePrintFormats(vector<string> &formats)
 {
 
-	MakeScanFormats(false);
-
-	mPrintFormats.clear();
-	mPrintFormats.assign( mScanFormats.begin(), mScanFormats.end() );
+	MakeScanFormats(formats,false);
 	
-	mPrintFormats[NPY_FLOAT] = "%.7g";
+	formats[NPY_FLOAT] = "%.7g";
     // for g the .16 means 16 total, 15 mantissa which is what we want for double
-	mPrintFormats[NPY_DOUBLE] = "%.16g";
+	formats[NPY_DOUBLE] = "%.16g";
 
-	mPrintFormats[NPY_STRING] = "%s";
+	formats[NPY_STRING] = "%s";
 
 }
 

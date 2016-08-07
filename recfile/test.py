@@ -15,6 +15,10 @@ if sys.version_info > (3,0,0):
 else:
     stype=str
 
+try:
+    xrange=xrange
+except:
+    xrange=range
 
 def test():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestReadWrite)
@@ -39,7 +43,7 @@ class TestReadWrite(unittest.TestCase):
             ('f4scalar','f4'),
             ('f8scalar','f8'),
             ##('c8scalar','c8'), # complex, two 32-bit
-            ##('c16scalar','c16'), # complex, two 32-bit
+            ##('c16scalar','c16'), # complex, two 64-bit
 
             ('u1vec','u1',nvec),
             ('i1vec','i1',nvec),
@@ -72,13 +76,11 @@ class TestReadWrite(unittest.TestCase):
             ('Sarr',   Sdtype, ashape),
         ]
 
-        dtype2=[('index','i4'),
-                ('x','f8'),
-                ('y','f8')]
 
         nrows=4
         data=numpy.zeros(nrows, dtype=dtype)
         names=data.dtype.names
+
 
         dtypes=['u1','i1','u2','i2','u4','i4','i8','f4','f8','c8','c16']
         for t in dtypes:
@@ -144,6 +146,27 @@ class TestReadWrite(unittest.TestCase):
 
         self.data = data
 
+        swap_dtype=[]
+        for d in dtype:
+            name=d[0]
+            if 'S' not in name:
+                tp = '>'+d[1]
+            else:
+                tp = d[1]
+
+            if len(d) == 3:
+                nd = (d[0], tp, d[2])
+            else:
+                nd = (d[0], tp)
+
+            swap_dtype.append(nd)
+
+        swap_data=numpy.zeros(nrows, dtype=swap_dtype)
+
+        for n in swap_data.dtype.names:
+            swap_data[n] = data[n]
+        self.swap_data = data
+
 
     def _get_prefix(self, name, delim):
         if delim is not None:
@@ -168,389 +191,161 @@ class TestReadWrite(unittest.TestCase):
 
         dtype=self.data.dtype
         nrows=self.data.size
-        #for delim in [None,",", ":","\t", " "]:
-        for delim in [None]:
+        for delim in [None,",", ":","\t", " "]:
+            for doswap in [False,True]:
 
-            try:
-                fname=self._get_testfile("testWriteRead",delim)
-                with Recfile(fname,mode='w',delim=delim) as robj:
+                if doswap:
+                    data = self.swap_data
+                else:
+                    data = self.data
 
-                    try:
-                        robj.write(self.data)
-                        write_success=True
-                    except:
-                        write_success=False
+                try:
+                    fname=self._get_testfile("testWriteRead",delim)
+                    with Recfile(fname,mode='w',delim=delim) as robj:
 
-                    self.assertTrue(write_success,"testing write does not raise an error")
-                    if not write_success:
-                        skipTest("cannot test result if write failed")
+                        try:
+                            robj.write(data)
+                            write_success=True
+                        except:
+                            write_success=False
 
-                with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
-                    d = robj.read()
+                        self.assertTrue(write_success,"testing write does not raise an error doswap: %s" % doswap)
+                        if not write_success:
+                            skipTest("cannot test result if write failed")
 
-                self.compare_rec(self.data, d, "table read/write")
+                    with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
+                        d = robj.read()
 
-                # see if our convenience functions are working
-                Util.write(fname, self.data)
-                d = Util.read(fname, dtype)
-                self.compare_rec(self.data, d, "test read/write with convenience functions")
+                    self.compare_rec(data, d, "table read/write")
 
-            finally:
-                if os.path.exists(fname):
-                    os.remove(fname)
+                    # see if our convenience functions are working
+                    Util.write(fname, data)
+                    d = Util.read(fname, dtype)
+                    self.compare_rec(data, d, "test read/write with convenience functions doswap: %s" % doswap)
+
+                finally:
+                    if os.path.exists(fname):
+                        os.remove(fname)
 
 
     def testSubsets(self):
         """
-        Test reading by slice
+        Test reading subsets and slices
         """
 
         dtype=self.data.dtype
         nrows=self.data.size
         for delim in [None,",", ":","\t", " "]:
-        #for delim in [None]:
-        #for delim in [","]:
+            for doswap in [False,True]:
+                sstr = " doswap: %s" % doswap
 
-            try:
-                fname=self._get_testfile("testSlice",delim)
-                with Recfile(fname,mode='w',delim=delim) as robj:
-                    # initial write
-                    robj.write(self.data)
+                try:
+                    fname=self._get_testfile("testSubsets",delim)
+                    with Recfile(fname,mode='w',delim=delim) as robj:
+                        # initial write
+                        robj.write(self.data)
 
-                #os.system('cat '+fname)
+                    with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
 
-                with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
-
-                    # row slices
-                    if delim is None:
+                        # row slices
                         d=robj[:]
-                        self.compare_rec(self.data, d, "row range all")
+                        self.compare_rec(self.data, d, "row range all"+sstr)
 
                         d=robj[1:3]
-                        self.compare_rec(self.data[1:3], d, "row range")
+                        self.compare_rec(self.data[1:3], d, "row range"+sstr)
 
                         d=robj[0:4:2]
-                        self.compare_rec(self.data[0:4:2], d, "row range step 2")
+                        self.compare_rec(self.data[0:4:2], d, "row range step 2"+sstr)
 
-                    # test reading single columns
-                    for f in self.data.dtype.names:
-                        #print("delim: '%s' column: '%s'" % (delim,f))
-                        #d = robj[f][:]
-                        d = robj.read_column(f)
-                        self.compare_array(self.data[f], d, "test read all rows %s column subset" % f)
+                        # test reading single columns
+                        for f in self.data.dtype.names:
+                            d = robj[f][:]
 
 
-                        if delim is None:
                             d = robj.read(columns=f)
-                            self.compare_array(self.data[f], d, "test read all rows %s column subset scalar name" % f)
+                            self.compare_array(self.data[f], d, "test read all rows %s column subset scalar name %s" % (f,sstr))
 
                             d = robj.read(columns=[f])
-                            self.compare_array(self.data[f], d[f], "test read all rows %s column subset" % f)
+                            self.compare_array(self.data[f], d[f], "test read all rows %s column subset %s" % (f,sstr))
 
                             d = robj[f][:]
-                            self.compare_array(self.data[f], d, "test read all rows %s column subset slice" % f)
+                            self.compare_array(self.data[f], d, "test read all rows %s column subset slice %s" % (f,sstr))
 
-                        rows = [1,3]
-                        d = robj.read_column(f, rows=rows)
-                        self.compare_array(self.data[f][rows], d, "test read rows %s column subset" % f)
+                            rows = [1,3]
+                            d = robj.read(columns=f, rows=rows)
+                            self.compare_array(self.data[f][rows], d, "test read rows %s column subset scalar name %s" % (f,sstr))
 
-                    if delim is None:
+                            d = robj.read(columns=[f], rows=rows)
+                            self.compare_array(self.data[f][rows], d[f], "test read rows %s column subset %s" % (f,sstr))
+
                         cols=['u2scalar','f4vec','Sarr']
-
-                        #print("delim: '%s' columns:" % delim,cols)
 
                         # column subset
                         d = robj.read(columns=cols)
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f], d[f], "test column list %s" % f)
+                            self.compare_array(self.data[f], d[f], "test column list %s %s" % (f,sstr))
 
                         # column subset and rows subset
+                        rows = [1,3]
                         d = robj[cols][rows]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][rows], d[f], "test column list %s row subset slice" % f)
+                            self.compare_array(self.data[f][rows], d[f], "test column list %s row subset slice %s" % (f,sstr))
 
                         d = robj.read(rows=rows, columns=cols)
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][rows], d[f], "test column list %s row subset" % f)
+                            self.compare_array(self.data[f][rows], d[f], "test column list %s row subset %s" % (f,sstr))
 
                         # combined with row slices
 
                         d = robj[cols][:]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f], d[f], "test column list %s slice" % f)
+                            self.compare_array(self.data[f], d[f], "test column list %s slice %s" % (f,sstr))
 
                         d = robj[cols][1:3]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][1:3], d[f], "test column list %s row slice" % f)
+                            self.compare_array(self.data[f][1:3], d[f], "test column list %s row slice %s" % (f,sstr))
 
                         d = robj[cols][0:4:2]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][0:4:2], d[f], "test column list %s row slice step 2" % f)
+                            self.compare_array(self.data[f][0:4:2], d[f], "test column list %s row slice step 2 %s" % (f,sstr))
+
+                finally:
+                    if os.path.exists(fname):
+                        os.remove(fname)
 
 
+    def testAppend(self):
+        """
+        Test creating a table and appending new rows.
+        """
 
-                    """
-                    # test reading row subsets
-                    rows = [1,3]
-                    for f in self.data.dtype.names:
-                        d = robj[f][rows]
-                        self.compare_array(self.data[f][rows], d, "test %s row subset" % f)
-                    for f in self.data.dtype.names:
-                        d = robj[f][1:3]
-                        self.compare_array(self.data[f][1:3], d, "test %s row slice" % f)
+        dtype=self.data.dtype
+        nrows=self.data.size
+        for delim in [None,",", ":","\t", " "]:
 
+            try:
+                fname=self._get_testfile("testSubsets",delim)
+                with Recfile(fname,mode='w',delim=delim) as robj:
+                    # initial write
+                    robj.write(self.data)
 
-                    """
+                    # appending
+                    data2 = self.data.copy()
+                    data2['f4scalar'] = 3
+                    robj.write(data2)
 
+                with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
+
+                    d = robj.read()
+                    self.assertEqual(d.size, self.data.size*2)
+
+                    self.compare_rec(self.data, d[0:self.data.size], "Comparing initial write")
+                    self.compare_rec(data2, d[self.data.size:], "Comparing appended data")
 
             finally:
                 if os.path.exists(fname):
                     os.remove(fname)
 
-
-    '''
-    def testTableAppend(self):
-        """
-        Test creating a table and appending new rows.
-        """
-
-        fname=tempfile.mktemp(prefix='fitsio-TableAppend-',suffix='.fits')
-        try:
-            with fitsio.FITS(fname,'rw',clobber=True) as fits:
-
-                # initial write
-                fits.write_table(self.data, header=self.hdr, extname='mytable')
-                # now append
-                data2 = self.data.copy()
-                data2['f4scalar'] = 3
-                fits[1].append(data2)
-
-                d = fits[1].read()
-                self.assertEqual(d.size, self.data.size*2)
-
-                self.compare_rec(self.data, d[0:self.data.size], "Comparing initial write")
-                self.compare_rec(data2, d[self.data.size:], "Comparing appended data")
-
-                h = fits[1].read_header()
-                self.compare_headerlist_header(self.hdr, h)
-
-        finally:
-            if os.path.exists(fname):
-                os.remove(fname)
-
-
-
-    def testTableSubsets(self):
-        """
-        Test a basic table write, data and a header, then reading back in to
-        check the values
-        """
-
-        fname=tempfile.mktemp(prefix='fitsio-TableWrite-',suffix='.fits')
-        try:
-            with fitsio.FITS(fname,'rw',clobber=True) as fits:
-
-                fits.write_table(self.data, header=self.hdr, extname='mytable')
-
-
-                rows = [1,3]
-                d = fits[1].read(rows=rows)
-                self.compare_rec_subrows(self.data, d, rows, "table subset")
-                columns = ['i1scalar','f4arr']
-                d = fits[1].read(columns=columns, rows=rows)
-
-                for f in columns:
-                    d = fits[1].read_column(f,rows=rows)
-                    self.compare_array(self.data[f][rows], d, "row subset, multi-column '%s'" % f)
-                for f in self.data.dtype.names:
-                    d = fits[1].read_column(f,rows=rows)
-                    self.compare_array(self.data[f][rows], d, "row subset, column '%s'" % f)
-
-        finally:
-            if os.path.exists(fname):
-                os.remove(fname)
-
-
-
-    def testGZWriteRead(self):
-        """
-        Test a basic table write, data and a header, then reading back in to
-        check the values
-
-        this code all works, but the file is zere size when done!
-        """
-
-        fname=tempfile.mktemp(prefix='fitsio-GZTableWrite-',suffix='.fits.gz')
-        try:
-            with fitsio.FITS(fname,'rw',clobber=True) as fits:
-
-                fits.write_table(self.data, header=self.hdr, extname='mytable')
-
-                d = fits[1].read()
-                self.compare_rec(self.data, d, "gzip write/read")
-
-                h = fits[1].read_header()
-                for entry in self.hdr:
-                    name=entry['name'].upper()
-                    value=entry['value']
-                    hvalue = h[name]
-                    if isinstance(hvalue,str):
-                        hvalue = hvalue.strip()
-                    self.assertEqual(value,hvalue,"testing header key '%s'" % name)
-
-                    if 'comment' in entry:
-                        self.assertEqual(entry['comment'].strip(),
-                                         h.get_comment(name).strip(),
-                                         "testing comment for header key '%s'" % name)
-            stat=os.stat(fname)
-            self.assertNotEqual(stat.st_size, 0, "Making sure the data was flushed to disk")
-        finally:
-            if os.path.exists(fname):
-                os.remove(fname)
-
-    def testBz2Read(self):
-        """
-        Write a normal .fits file, run bzip2 on it, then read the bz2
-        file and verify that it's the same as what we put in; we don't
-        [currently support or] test *writing* bzip2.
-        """
-        fname=tempfile.mktemp(prefix='fitsio-BZ2TableWrite-',suffix='.fits')
-        bzfname = fname + '.bz2'
-
-        try:
-            fits = fitsio.FITS(fname,'rw',clobber=True)
-            fits.write_table(self.data, header=self.hdr, extname='mytable')
-            fits.close()
-    
-            os.system('bzip2 %s' % fname)
-            f2 = fitsio.FITS(bzfname)
-            d = f2[1].read()
-            self.compare_rec(self.data, d, "bzip2 read")
-    
-            h = f2[1].read_header()
-            for entry in self.hdr:
-                name=entry['name'].upper()
-                value=entry['value']
-                hvalue = h[name]
-                if isinstance(hvalue,str):
-                    hvalue = hvalue.strip()
-                self.assertEqual(value,hvalue,"testing header key '%s'" % name)
-                if 'comment' in entry:
-                    self.assertEqual(entry['comment'].strip(),
-                                     h.get_comment(name).strip(),
-                                     "testing comment for header key '%s'" % name)
-        except:
-            import traceback
-            traceback.print_exc()
-            self.assertTrue(False, 'Exception in testing bzip2 reading')
-        finally:
-            if os.path.exists(fname):
-                os.remove(fname)
-            if os.path.exists(bzfname):
-                os.remove(bzfname)
-            pass
-    def testChecksum(self):
-        """
-        Test a basic table write, data and a header, then reading back in to
-        check the values
-        """
-
-        fname=tempfile.mktemp(prefix='fitsio-Checksum-',suffix='.fits')
-        try:
-            with fitsio.FITS(fname,'rw',clobber=True) as fits:
-
-                fits.write_table(self.data, header=self.hdr, extname='mytable')
-                fits[1].write_checksum()
-                fits[1].verify_checksum()
-        finally:
-            if os.path.exists(fname):
-                os.remove(fname)
-
-
-    def testLowerUpper(self):
-        fname=tempfile.mktemp(prefix='fitsio-LowerUpper-',suffix='.fits')
-        dt=[('MyName','f8'),('StuffThings','i4'),('Blah','f4')]
-        data=numpy.zeros(3, dtype=dt)
-        data['MyName'] = numpy.random.random(data.size)
-        data['StuffThings'] = numpy.random.random(data.size)
-        data['Blah'] = numpy.random.random(data.size)
-
-        lnames = [n.lower() for n in data.dtype.names]
-        unames = [n.upper() for n in data.dtype.names]
-
-        try:
-            with fitsio.FITS(fname,'rw',clobber=True) as fits:
-                fits.write(data)
-
-            for i in [1,2]:
-                if i == 1:
-                    lower=True
-                    upper=False
-                else:
-                    lower=False
-                    upper=True
-
-                with fitsio.FITS(fname,'rw', lower=lower, upper=upper) as fits:
-                    for rows in [None, [1,2]]:
-
-                        d=fits[1].read(rows=rows)
-                        self.compare_names(d.dtype.names,data.dtype.names,
-                                           lower=lower,upper=upper)
-
-
-                        d=fits[1].read(rows=rows, columns=['MyName','stuffthings'])
-                        self.compare_names(d.dtype.names,data.dtype.names[0:2],
-                                           lower=lower,upper=upper)
-
-                        d = fits[1][1:2]
-                        self.compare_names(d.dtype.names,data.dtype.names,
-                                           lower=lower,upper=upper)
-
-                        if rows is not None:
-                            d = fits[1][rows]
-                        else:
-                            d = fits[1][:]
-                        self.compare_names(d.dtype.names,data.dtype.names,
-                                           lower=lower,upper=upper)
-
-                        if rows is not None:
-                            d = fits[1][['myname','stuffthings']][rows]
-                        else:
-                            d = fits[1][['myname','stuffthings']][:]
-                        self.compare_names(d.dtype.names,data.dtype.names[0:2],
-                                           lower=lower,upper=upper)
-
-                # using overrides
-                with fitsio.FITS(fname,'rw') as fits:
-                    for rows in [None, [1,2]]:
-
-                        d=fits[1].read(rows=rows, lower=lower, upper=upper)
-                        self.compare_names(d.dtype.names,data.dtype.names,
-                                           lower=lower,upper=upper)
-
-
-                        d=fits[1].read(rows=rows, columns=['MyName','stuffthings'],
-                                       lower=lower,upper=upper)
-                        self.compare_names(d.dtype.names,data.dtype.names[0:2],
-                                           lower=lower,upper=upper)
-
-
-
-                for rows in [None, [1,2]]:
-                    d=fitsio.read(fname, rows=rows, lower=lower, upper=upper)
-                    self.compare_names(d.dtype.names,data.dtype.names,
-                                       lower=lower,upper=upper)
-
-                    d=fitsio.read(fname, rows=rows, columns=['MyName','stuffthings'],
-                                  lower=lower, upper=upper)
-                    self.compare_names(d.dtype.names,data.dtype.names[0:2],
-                                       lower=lower,upper=upper)
-
-
-        finally:
-            if os.path.exists(fname):
-                os.remove(fname)
-    '''
 
     def compare_names(self, read_names, true_names, lower=False, upper=False):
         for nread,ntrue in zip(read_names,true_names):
