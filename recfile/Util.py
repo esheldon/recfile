@@ -355,6 +355,8 @@ class Recfile(object):
                 dtype=self.dtype,
                 nrows=self.nrows,
                 offset=self.offset,
+                padnull=self.padnull,
+                ignorenull=self.ignorenull,
             )
         else:
             self.robj = records.Records(
@@ -362,6 +364,8 @@ class Recfile(object):
                 mode=self.mode,
                 delim=self.delim,
                 bracket_arrays=self.bracket_arrays,
+                padnull=self.padnull,
+                ignorenull=self.ignorenull,
             )
 
     def get_nrows(self):
@@ -583,7 +587,7 @@ class Recfile(object):
             # simplifies the C code
             to_native_inplace(dataview)
 
-        self.robj.Write(dataview, padnull=self.padnull, ignorenull=self.ignorenull)
+        self.robj.Write(dataview)
 
         # update nrows to reflect the write
         self.nrows += dataview.size

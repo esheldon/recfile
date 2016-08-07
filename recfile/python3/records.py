@@ -97,8 +97,8 @@ class Records(_object):
     __getattr__ = lambda self, name: _swig_getattr(self, Records, name)
     __repr__ = _swig_repr
 
-    def __init__(self, filename, mode, delim=None, dtype=None, nrows=-9999, offset=0, bracket_arrays=0):
-        this = _records.new_Records(filename, mode, delim, dtype, nrows, offset, bracket_arrays)
+    def __init__(self, filename, mode, delim=None, dtype=None, nrows=-9999, offset=0, bracket_arrays=0, padnull=False, ignorenull=False):
+        this = _records.new_Records(filename, mode, delim, dtype, nrows, offset, bracket_arrays, padnull, ignorenull)
         try:
             self.this.append(this)
         except Exception:
@@ -106,8 +106,8 @@ class Records(_object):
     __swig_destroy__ = _records.delete_Records
     __del__ = lambda self: None
 
-    def Write(self, obj, padnull=False, ignorenull=False):
-        return _records.Records_Write(self, obj, padnull, ignorenull)
+    def Write(self, obj):
+        return _records.Records_Write(self, obj)
 
     def close(self):
         return _records.Records_close(self)

@@ -3446,6 +3446,8 @@ SWIGINTERN PyObject *_wrap_new_Records(PyObject *SWIGUNUSEDPARM(self), PyObject 
   long long arg5 = (long long) -9999 ;
   long arg6 = (long) 0 ;
   int arg7 = (int) 0 ;
+  bool arg8 = (bool) false ;
+  bool arg9 = (bool) false ;
   int res1 ;
   char *buf1 = 0 ;
   int alloc1 = 0 ;
@@ -3458,6 +3460,10 @@ SWIGINTERN PyObject *_wrap_new_Records(PyObject *SWIGUNUSEDPARM(self), PyObject 
   int ecode6 = 0 ;
   int val7 ;
   int ecode7 = 0 ;
+  bool val8 ;
+  int ecode8 = 0 ;
+  bool val9 ;
+  int ecode9 = 0 ;
   PyObject * obj0 = 0 ;
   PyObject * obj1 = 0 ;
   PyObject * obj2 = 0 ;
@@ -3465,12 +3471,14 @@ SWIGINTERN PyObject *_wrap_new_Records(PyObject *SWIGUNUSEDPARM(self), PyObject 
   PyObject * obj4 = 0 ;
   PyObject * obj5 = 0 ;
   PyObject * obj6 = 0 ;
+  PyObject * obj7 = 0 ;
+  PyObject * obj8 = 0 ;
   char *  kwnames[] = {
-    (char *) "filename",(char *) "mode",(char *) "delim",(char *) "dtype",(char *) "nrows",(char *) "offset",(char *) "bracket_arrays", NULL 
+    (char *) "filename",(char *) "mode",(char *) "delim",(char *) "dtype",(char *) "nrows",(char *) "offset",(char *) "bracket_arrays",(char *) "padnull",(char *) "ignorenull", NULL 
   };
   Records *result = 0 ;
   
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OO|OOOOO:new_Records",kwnames,&obj0,&obj1,&obj2,&obj3,&obj4,&obj5,&obj6)) SWIG_fail;
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OO|OOOOOOO:new_Records",kwnames,&obj0,&obj1,&obj2,&obj3,&obj4,&obj5,&obj6,&obj7,&obj8)) SWIG_fail;
   res1 = SWIG_AsCharPtrAndSize(obj0, &buf1, NULL, &alloc1);
   if (!SWIG_IsOK(res1)) {
     SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "new_Records" "', argument " "1"" of type '" "char const *""'");
@@ -3508,8 +3516,22 @@ SWIGINTERN PyObject *_wrap_new_Records(PyObject *SWIGUNUSEDPARM(self), PyObject 
     } 
     arg7 = static_cast< int >(val7);
   }
+  if (obj7) {
+    ecode8 = SWIG_AsVal_bool(obj7, &val8);
+    if (!SWIG_IsOK(ecode8)) {
+      SWIG_exception_fail(SWIG_ArgError(ecode8), "in method '" "new_Records" "', argument " "8"" of type '" "bool""'");
+    } 
+    arg8 = static_cast< bool >(val8);
+  }
+  if (obj8) {
+    ecode9 = SWIG_AsVal_bool(obj8, &val9);
+    if (!SWIG_IsOK(ecode9)) {
+      SWIG_exception_fail(SWIG_ArgError(ecode9), "in method '" "new_Records" "', argument " "9"" of type '" "bool""'");
+    } 
+    arg9 = static_cast< bool >(val9);
+  }
   try {
-    result = (Records *)new Records((char const *)arg1,(char const *)arg2,arg3,arg4,arg5,arg6,arg7);
+    result = (Records *)new Records((char const *)arg1,(char const *)arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9);
   }
   catch(char const *_e) {
     PyErr_SetString(PyExc_RuntimeError, _e);
@@ -3553,46 +3575,24 @@ SWIGINTERN PyObject *_wrap_Records_Write(PyObject *SWIGUNUSEDPARM(self), PyObjec
   PyObject *resultobj = 0;
   Records *arg1 = (Records *) 0 ;
   PyObject *arg2 = (PyObject *) 0 ;
-  bool arg3 = (bool) false ;
-  bool arg4 = (bool) false ;
   void *argp1 = 0 ;
   int res1 = 0 ;
-  bool val3 ;
-  int ecode3 = 0 ;
-  bool val4 ;
-  int ecode4 = 0 ;
   PyObject * obj0 = 0 ;
   PyObject * obj1 = 0 ;
-  PyObject * obj2 = 0 ;
-  PyObject * obj3 = 0 ;
   char *  kwnames[] = {
-    (char *) "self",(char *) "obj",(char *) "padnull",(char *) "ignorenull", NULL 
+    (char *) "self",(char *) "obj", NULL 
   };
   PyObject *result = 0 ;
   
-  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OO|OO:Records_Write",kwnames,&obj0,&obj1,&obj2,&obj3)) SWIG_fail;
+  if (!PyArg_ParseTupleAndKeywords(args,kwargs,(char *)"OO:Records_Write",kwnames,&obj0,&obj1)) SWIG_fail;
   res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_Records, 0 |  0 );
   if (!SWIG_IsOK(res1)) {
     SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Records_Write" "', argument " "1"" of type '" "Records *""'"); 
   }
   arg1 = reinterpret_cast< Records * >(argp1);
   arg2 = obj1;
-  if (obj2) {
-    ecode3 = SWIG_AsVal_bool(obj2, &val3);
-    if (!SWIG_IsOK(ecode3)) {
-      SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "Records_Write" "', argument " "3"" of type '" "bool""'");
-    } 
-    arg3 = static_cast< bool >(val3);
-  }
-  if (obj3) {
-    ecode4 = SWIG_AsVal_bool(obj3, &val4);
-    if (!SWIG_IsOK(ecode4)) {
-      SWIG_exception_fail(SWIG_ArgError(ecode4), "in method '" "Records_Write" "', argument " "4"" of type '" "bool""'");
-    } 
-    arg4 = static_cast< bool >(val4);
-  }
   try {
-    result = (PyObject *)(arg1)->Write(arg2,arg3,arg4);
+    result = (PyObject *)(arg1)->Write(arg2);
   }
   catch(char const *_e) {
     PyErr_SetString(PyExc_RuntimeError, _e);

@@ -34,7 +34,10 @@ class Records {
 				PyObject* dtype=NULL,
 				long long nrows=-9999,
                 long offset=0,
-                int bracket_arrays=0) throw (const char *);
+                int bracket_arrays=0,
+                bool padnull=false,
+                bool ignorenull=false
+        ) throw (const char *);
 
         ~Records();
 
@@ -49,10 +52,7 @@ class Records {
         */
 
 
-		PyObject* Write(
-				PyObject* obj, 
-				bool padnull=false,
-				bool ignorenull=false) throw (const char *);
+		PyObject* Write(PyObject* obj) throw (const char *);
 
 
 		void close() throw (const char*);
@@ -242,7 +242,11 @@ class Records {
 		// Reading as binary or ascii?
 		bool mReadAsWhitespace;                                //---
 
+        // when writing text, padd out nulls in strings with spaces
 		bool mPadNull;
+
+        // when writing text, do not write beyond the null
+        // for reading back in this may cause problems for some delimiters
 		bool mIgnoreNull;
 
 

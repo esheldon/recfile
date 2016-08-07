@@ -105,13 +105,17 @@ Records::Records(
 		PyObject* dtype,
 		long long nrows,
         long offset,
-        int bracket_arrays) throw (const char *)
+        int bracket_arrays,
+        bool padnull,
+        bool ignorenull) throw (const char *)
 {
     init_numpy();
 
 	init_variables();
 
     mBracketArrays = bracket_arrays;
+    mPadNull=padnull;
+    mIgnoreNull=ignorenull;
 
 	mMode=mode;
 
@@ -1470,10 +1474,7 @@ PyObject* Records::update_row_count(long nrows) throw (const char* )
 
 
 
-PyObject* Records::Write(
-		PyObject* obj, 
-		bool padnull,
-		bool ignorenull) throw (const char* )
+PyObject* Records::Write(PyObject* obj) throw (const char* )
 {
     ensure_writable();
 
@@ -1490,10 +1491,6 @@ PyObject* Records::Write(
 	mNrows = PyArray_Size(obj);
 
 	PyArray_Descr* descr = PyArray_DESCR(obj);
-
-	// Null characters in strings are converted to spaces
-	mPadNull = padnull;
-	mIgnoreNull = ignorenull;
 
 	copy_field_info(descr);
 
