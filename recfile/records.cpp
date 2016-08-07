@@ -176,6 +176,8 @@ void Records::init_variables()
 {
 
 
+    mData=NULL;
+
 	// The type descriptor for each row of the file.  Will decref since we
 	// increfed as we made a copy
 	mTypeDescr=NULL;
