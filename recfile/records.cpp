@@ -109,7 +109,7 @@ Records::Records(
 {
     init_numpy();
 
-	InitializeVariables();
+	init_variables();
 
     mBracketArrays = bracket_arrays;
 
@@ -134,16 +134,16 @@ Records::Records(
 
         goto_offset();
 
-		ProcessDescr(dtype);
-		ProcessNrows(nrows);
+		process_descriptor(dtype);
+		process_nrows(nrows);
 
 	} else {
 		// Only opened for writing
 		mAction=WRITE;
 	}
 
-    MakeScanFormats(mScanFormats,true);
-    MakePrintFormats(mPrintFormats);
+    make_scan_formats(mScanFormats,true);
+    make_print_formats(mPrintFormats);
 
 }
 
@@ -161,21 +161,21 @@ Records::~Records()
 	// This may or may not be a copy, but we must decref 
 	Py_XDECREF(mRowsToRead);
 
-	Close();
+	this->close();
 
 }
 
-void Records::Close() throw (const char*)
+void Records::close() throw (const char*)
 {
 	if (mFptr != NULL) {
-		if (mDebug) DebugOut("Closing file");
+		if (mDebug) debugout("Closing file");
 		fclose(mFptr);
 		mFptr=NULL;
 	}
 }
 
 
-void Records::InitializeVariables()
+void Records::init_variables()
 {
 
 	// First initialize all those pointers.  We must do this in case they
@@ -203,9 +203,6 @@ void Records::InitializeVariables()
 	mFileType = BINARY_FILE;
 
 	mReadAsWhitespace=false;
-	mReadWholeFileBinary=false;
-	mReadWholeRowBinary=false;
-
 
 	// Keep field stuff
 	mKeepTypeDescr=NULL;
@@ -220,55 +217,108 @@ void Records::InitializeVariables()
 
 }
 
+void Records::process_nrows(long long nrows) 
+{
+	if (mDebug) {cerr<<"nrows = "<<nrows<<endl;fflush(stdout);}
+	if (nrows < 1) {
+		throw "Input nrows must be >= 1";
+	}
+	mNrows = nrows;
+}
+
+
+void Records::ensure_writable(void) throw (const char* )
+{
+	if (mFptr == NULL) {
+		throw "File is not open";
+	}
+	if ( (mAction & WRITE) == 0) {
+		throw "File is not open for writing";
+	}
+}
+void Records::ensure_readable(void) throw (const char* )
+{
+	if (mFptr == NULL) {
+		throw "File is not open";
+	}
+	if ( (mAction & READ) == 0) {
+		throw "File is not open for reading";
+	}
+}
+
+void Records::ensure_binary(void) throw (const char* )
+{
+    if (mFileType != BINARY_FILE) {
+		throw "attempt to read ascii data as binary";
+    }
+}
+void Records::ensure_text(void) throw (const char* )
+{
+    if (mFileType != ASCII_FILE) {
+		throw "attempt to read binary data as text";
+    }
+}
 
 void Records::goto_offset(void)
 {
     fseek(mFptr, mFileOffset, SEEK_SET);
 }
 
-PyObject* Records::ReadSlice(long long row1, long long row2, long long step)  throw (const char* )
-{
-    ensure_readable();
-
-    // always start at the users requested offset
-    goto_offset();
-
-	// juse some error checking and return implied length
-	mNrowsToRead = ProcessSlice(row1, row2, step);
-
-	// slice we read all fields, so send Py_None
-	ProcessFieldsToRead(Py_None);
-	CreateOutputArray();
-
-	ReadPrepare();
-
-
-	if (mReadWholeFileBinary) {
-		ReadAllAsBinary();
-	} else {
-		ReadRowsSlice(row1, step);
+void Records::do_seek(npy_intp seek_distance) {
+	if (seek_distance > 0) {
+		if(fseeko(mFptr, seek_distance, SEEK_CUR) != 0) {
+			string err="Error skipping fields";
+			throw err.c_str();
+		}
 	}
-
-	return (PyObject* ) mReturnObject;
 }
 
-PyObject* Records::Read(
-		PyObject* rows,
-		PyObject* fields) throw (const char* )
+void Records::skip_rows(long long current_row, long long row2read)
 {
-    ensure_readable();
-
-    goto_offset();
-
-	ProcessRowsToRead(rows);
-	ProcessFieldsToRead(fields);
-	CreateOutputArray();
-	ReadPrepare();
-
-	ReadFromFile();
-
-	return (PyObject* ) mReturnObject;
+	long long rows2skip=0;
+	if (mFileType == BINARY_FILE) {
+		rows2skip = row2read-current_row;
+		skip_binary_rows(rows2skip);
+	} else {
+		if (mReadAsWhitespace) {
+			rows2skip = row2read - current_row;// + 1;
+		} else {
+			rows2skip = row2read - current_row;
+		}
+		skip_text_rows(rows2skip);
+	}
 }
+
+
+
+void Records::skip_text_rows(long long nskip)
+{
+	if (nskip > 0) {
+		long long nlines = 0;
+		char c;
+		while (nlines < nskip) {
+			c = fgetc(mFptr);
+			if (c == EOF) {
+				throw "Reached EOF prematurely";
+			}
+			if (c == '\n') {
+				nlines++;
+			}
+		}
+	}
+}
+
+void Records::skip_binary_rows(long long nskip)
+{
+	if (nskip > 0) {
+		if (fseeko(mFptr, mRowSize*nskip, SEEK_CUR) != 0) {
+			throw "Failed to fseek";
+		}
+	}
+}
+
+
+
 
 
 // read all the elements of a field
@@ -479,7 +529,7 @@ void Records::read_text_columns(PyObject* arrayobj,
         } else {
             row2read = *(npy_int64 *) PyArray_GETPTR1(rows, irow);
             if (row2read > current_row) {
-                SkipRows(current_row, row2read);
+                skip_rows(current_row, row2read);
                 current_row=row2read;
             } 
         }
@@ -561,7 +611,7 @@ void Records::read_binary_columns(PyObject* arrayobj,
         //fprintf(stderr,"current_row: %ld row2read: %ld\n", current_row, row2read);
 
 		if (row2read > current_row) {
-			SkipRows(current_row, row2read);
+			skip_rows(current_row, row2read);
 			current_row=row2read;
 		} 
 
@@ -575,7 +625,7 @@ void Records::read_binary_columns(PyObject* arrayobj,
 
             if (col2read > current_col) {
                 seek_distance = mOffsets[col2read] - current_offset;
-                DoSeek(seek_distance);
+                do_seek(seek_distance);
 
                 current_col=col2read;
                 current_offset += seek_distance;
@@ -596,13 +646,47 @@ void Records::read_binary_columns(PyObject* arrayobj,
         // skip the rest of the row if needed
         if (current_offset < mRowSize) {
             seek_distance = mRowSize - current_offset;
-            DoSeek(seek_distance);
+            do_seek(seek_distance);
         }
 
         current_row++ ;
     }
 
 }
+
+npy_intp Records::process_slice(npy_intp row1, npy_intp row2, npy_intp step)
+{
+	// Just do some error checking on the requested rows
+	stringstream serr;
+	if (row1 < 0) {
+		serr<<"Requested first row < 0";
+		throw serr.str().c_str();
+	}
+	if (row2 > mNrows) {
+		serr<<"Requested slice beyond delcared size "<<mNrows;
+		throw serr.str().c_str();
+	}
+
+	if (step <= 0) {
+		serr<<"Requested step must be > 0";
+		throw serr.str().c_str();
+	}
+
+	// we use python slicing rules:  [n1:n2:step] really means  from n1 to n2-1
+	// so the number of rows to read is simply (n2-n1)/step + (n2-21) % step
+	npy_intp rdiff = (row2-row1);
+
+	npy_intp extra = 0;
+	if ((rdiff % step) != 0) {
+		extra = 1;
+	}
+	npy_intp nrows = rdiff/step + extra;
+
+
+	if (mDebug) cerr<<"slice: ("<<row1<<", "<<row2<<", "<<step<<") nrows: "<<nrows<<"/"<<mNrows<<"\n";
+	return nrows;
+}
+
 
 
 /*
@@ -615,6 +699,7 @@ void Records::read_binary_columns(PyObject* arrayobj,
    the input array must have the right size
 */
 
+
 PyObject* Records::read_binary_slice(PyObject* arrayobj,
                                      long long row1,
                                      long long row2,
@@ -624,13 +709,13 @@ PyObject* Records::read_binary_slice(PyObject* arrayobj,
     ensure_readable();
     ensure_binary();
 
-	npy_intp nrows2read = ProcessSlice(row1, row2, step);
+	npy_intp nrows2read = process_slice(row1, row2, step);
 
     // always begin at the user's requested file offset
     goto_offset();
 
     if (row1 > 0) {
-		SkipBinaryRows(row1);
+		skip_binary_rows(row1);
     }
 
     if (step==1) {
@@ -653,7 +738,7 @@ PyObject* Records::read_binary_slice(PyObject* arrayobj,
                 throw "Failed to read row data";
             }
 
-            SkipBinaryRows(step-1);
+            skip_binary_rows(step-1);
 
         }
     }
@@ -665,6 +750,53 @@ PyObject* Records::read_binary_slice(PyObject* arrayobj,
 
 
 
+
+/*
+
+
+PyObject* Records::ReadSlice(long long row1, long long row2, long long step)  throw (const char* )
+{
+    ensure_readable();
+
+    // always start at the users requested offset
+    goto_offset();
+
+	// juse some error checking and return implied length
+	mNrowsToRead = ProcessSlice(row1, row2, step);
+
+	// slice we read all fields, so send Py_None
+	ProcessFieldsToRead(Py_None);
+	CreateOutputArray();
+
+	ReadPrepare();
+
+
+	if (mReadWholeFileBinary) {
+		ReadAllAsBinary();
+	} else {
+		ReadRowsSlice(row1, step);
+	}
+
+	return (PyObject* ) mReturnObject;
+}
+
+PyObject* Records::Read(
+		PyObject* rows,
+		PyObject* fields) throw (const char* )
+{
+    ensure_readable();
+
+    goto_offset();
+
+	ProcessRowsToRead(rows);
+	ProcessFieldsToRead(fields);
+	CreateOutputArray();
+	ReadPrepare();
+
+	ReadFromFile();
+
+	return (PyObject* ) mReturnObject;
+}
 
 void Records::ReadPrepare()
 {
@@ -681,7 +813,7 @@ void Records::ReadPrepare()
 
 		mReadWholeRowBinary = true;
 	} else if (mFileType == ASCII_FILE) {
-		//MakeScanFormats(true);
+		//make_scan_formats(true);
 	}
 }
 
@@ -696,7 +828,7 @@ void Records::ReadFromFile()
 
 void Records::ReadAllAsBinary()
 {
-	if (mDebug) DebugOut("Reading all in one big fread()");
+	if (mDebug) debugout("Reading all in one big fread()");
 	int nread = fread(mData, mRowSize, mNrows, mFptr);
 	if (nread != mNrows) {
 		throw "Error reading entire file as binary";
@@ -717,7 +849,7 @@ void Records::ReadRows()
 		// No data created or copied here
 		rows = (npy_intp*) PyArray_DATA(mRowsToRead);
 	}
-	if (mDebug) DebugOut("Reading rows");
+	if (mDebug) debugout("Reading rows");
 
 	// Loop over the rows to read, which could be a subset of the 
 	// total number of rows in the file.
@@ -730,7 +862,7 @@ void Records::ReadRows()
 
 		// Skip rows?
 		if (row2read > current_row) {
-			SkipRows(current_row, row2read);
+			skip_rows(current_row, row2read);
 			current_row=row2read;
 		} 
 
@@ -744,13 +876,13 @@ void Records::ReadRows()
 void Records::ReadRowsSlice(npy_intp row1, npy_intp step) throw (const char* )
 {
 
-	if (mDebug) DebugOut("Reading rows by slice");
+	if (mDebug) debugout("Reading rows by slice");
 
 	if (step == 1 && mFileType == BINARY_FILE) {
 
 		// We can just read a big chunk
 		if (row1 > 0) {
-			SkipRows(0, row1);
+			skip_rows(0, row1);
 		}
 
 		npy_intp nread = fread(mData, mRowSize, mNrowsToRead, mFptr);
@@ -767,7 +899,7 @@ void Records::ReadRowsSlice(npy_intp row1, npy_intp step) throw (const char* )
 
 			// Skip rows
 			if (row2read > current_row) {
-				SkipRows(current_row, row2read);
+				skip_rows(current_row, row2read);
 				current_row=row2read;
 			} 
 
@@ -961,51 +1093,6 @@ void Records::ReadWholeRowBinary()
 
 
 
-void Records::SkipRows(long long current_row, long long row2read)
-{
-	long long rows2skip=0;
-	if (mFileType == BINARY_FILE) {
-		rows2skip = row2read-current_row;
-		SkipBinaryRows(rows2skip);
-	} else {
-		if (mReadAsWhitespace) {
-			rows2skip = row2read - current_row;// + 1;
-		} else {
-			rows2skip = row2read - current_row;
-		}
-		SkipAsciiRows(rows2skip);
-	}
-}
-
-
-
-void Records::SkipAsciiRows(long long nskip)
-{
-	if (nskip > 0) {
-		long long nlines = 0;
-		char c;
-		while (nlines < nskip) {
-			c = fgetc(mFptr);
-			if (c == EOF) {
-				throw "Reached EOF prematurely";
-			}
-			if (c == '\n') {
-				nlines++;
-			}
-		}
-	}
-}
-
-void Records::SkipBinaryRows(long long nskip)
-{
-	if (nskip > 0) {
-		if (fseeko(mFptr, mRowSize*nskip, SEEK_CUR) != 0) {
-			throw "Failed to fseek";
-		}
-	}
-}
-
-
 
 void Records::CreateOutputArray()
 {
@@ -1018,11 +1105,11 @@ void Records::CreateOutputArray()
 	shape.len = 1;
 
 
-	if (mDebug) DebugOut("Creating output array");
+	if (mDebug) debugout("Creating output array");
 
 	shape.ptr[0] = mNrowsToRead;
 
-	if (mDebug) DebugOut("  Allocating");
+	if (mDebug) debugout("  Allocating");
 	mReturnObject = (PyArrayObject* ) 
 		PyArray_Zeros(
 				1, 
@@ -1046,37 +1133,304 @@ void Records::CreateOutputArray()
 	mData = mReturnObject->data;
 }
 
-void Records::ensure_writable(void) throw (const char* )
-{
-	if (mFptr == NULL) {
-		throw "File is not open";
+
+// given a numpy  PyArray_Descr* and a list of field names return a new
+// type descriptor containing only the subset
+
+void Records::SubDtype(
+		PyObject* indescr, 
+		PyObject* subnamesobj,
+		PyObject** newdescr,
+		vector<long long>& matchids) {
+
+	PyArray_Descr* descr=(PyArray_Descr* ) indescr;
+	//vector<string> names;
+
+	// make string vector
+	//copy_descr_ordered_names(descr);
+
+	// This makes sure they end up in the original order: important
+	// for skipping fields and such
+	
+	// First deal with a scalar string or list input
+	if (PyList_Check(subnamesobj)) {
+		ListStringMatch(mNames, subnamesobj, matchids);
+	} else if (is_python_string(subnamesobj)) {
+		// Must decref
+		PyObject* tmplist = PyList_New(0);
+		// Makes a copy on append.
+		PyList_Append(tmplist, subnamesobj);
+		ListStringMatch(mNames, tmplist, matchids);
+		Py_XDECREF(tmplist);
+	} else {
+		throw "fields keyword must be string or list";
 	}
-	if ( (mAction & WRITE) == 0) {
-		throw "File is not open for writing";
+	vector<string> matchnames;
+	matchnames.resize(matchids.size());
+	for (unsigned long long i=0; i<matchids.size(); i++) {
+		//matchnames[i] = names[matchids[i]];
+		matchnames[i] = mNames[matchids[i]];
 	}
-}
-void Records::ensure_readable(void) throw (const char* )
-{
-	if (mFptr == NULL) {
-		throw "File is not open";
-	}
-	if ( (mAction & READ) == 0) {
-		throw "File is not open for reading";
-	}
+
+	// Now based on the matches create a new dtype
+	*newdescr = ExtractSubDescr(descr, matchnames);
+
 }
 
-void Records::ensure_binary(void) throw (const char* )
+
+
+
+// Extract a subset of the fields from a PyArray_Descr and return a new
+// descr with that info
+PyObject* Records::ExtractSubDescr(
+		PyArray_Descr* descr, 
+		vector<string>& names)
 {
-    if (mFileType != BINARY_FILE) {
-		throw "attempt to read ascii data as binary";
-    }
+
+	PyArray_Descr *fdescr=NULL;
+	char* title=NULL;
+	long long offset;
+
+	PyObject* dlist=PyList_New(0);
+	PyArray_Descr* newdescr=NULL;
+
+	if (mDebug) {cerr<<"Extracting sub descr"<<endl;fflush(stdout);}
+	for (unsigned long long i=0; i<names.size(); i++) {
+		PyObject* item =
+			PyDict_GetItemString(descr->fields, names[i].c_str());
+
+		if (item!=NULL) {
+			if (!PyArg_ParseTuple(item, "Oi|O", &fdescr, &offset, &title)) {
+				if (mDebug) 
+				{cerr<<"Field: "<<names[i]<<" not right format"<<endl;}
+			} else {
+
+				PyObject* tup = 
+					FieldDescriptorAsTuple(fdescr, names[i].c_str());
+
+				// copy is made of tuple
+				if (PyList_Append(dlist, tup) != 0) {
+					throw "Could not append to list";
+				}
+				Py_XDECREF(tup);
+
+			}
+		} else {
+			if (mDebug) 
+			{cerr<<"field: "<<names[i]<<" does not exist. offset->-1"<<endl;}
+		}
+	}
+
+	// Now convert this list to a descr
+	if (mDebug) {cerr<<"Converting list to descr"<<endl;fflush(stdout);}
+	if (!PyArray_DescrConverter(dlist, &newdescr)) {
+		throw "data type not understood";
+	}
+	if (mDebug) {cerr<<"  Done"<<endl;fflush(stdout);};
+
+	return( (PyObject* )newdescr);
 }
-void Records::ensure_text(void) throw (const char* )
+
+
+
+
+
+
+
+// Copy some info from a fields["fname"].descr into a tuple
+// This will become part of a list of tuples dtype send to the converter
+PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* name)
 {
-    if (mFileType != ASCII_FILE) {
-		throw "attempt to read binary data as text";
-    }
+	// Use a string stream to convert all the char and possible int
+	// elements of a type string
+	stringstream typestream (stringstream::in | stringstream::out);
+	string typestring;
+
+	long long nel=0, tupsize=0;
+	PyObject* shape=NULL;
+	if (fdescr->subarray != NULL) {
+		// This is a sub-array and requires the tuple to have a
+		// length specified Here we are implicitly only allowing
+		// subarrays of basic numbers or strings
+
+		typestream << fdescr->subarray->base->byteorder;
+		typestream << fdescr->subarray->base->type;
+		if (fdescr->subarray->base->type_num == NPY_STRING) {
+			typestream << fdescr->subarray->base->elsize;
+		}
+		nel = fdescr->elsize/fdescr->subarray->base->elsize;
+
+		// Need to incref this because the PyTuple_SetItem will
+		// steal a reference
+		shape = fdescr->subarray->shape;
+		tupsize=3;
+	} else {
+		typestream << fdescr->byteorder;
+		typestream << fdescr->type;
+		if (fdescr->type_num == NPY_STRING) {
+			typestream << fdescr->elsize;
+		}
+		nel = 1;
+		tupsize=2;
+	}
+
+	typestream >> typestring;
+
+	// A copy is made when inserting into the list 
+	// so we need to decref this
+	PyObject* tup=PyTuple_New(tupsize);
+
+	// In setitems references are stolen, so better to just
+	// put the expressions in there than possibly worry later
+	// about references
+	PyTuple_SetItem(
+			tup,
+			0,
+#if PY_MAJOR_VERSION >= 3
+			PyBytes_FromString(name)
+#else
+			PyString_FromString(name)
+#endif
+    );
+	PyTuple_SetItem(
+			tup,
+			1,
+#if PY_MAJOR_VERSION >= 3
+			PyBytes_FromString(typestring.c_str())
+#else
+			PyString_FromString(typestring.c_str())
+#endif
+    );
+
+	if (tupsize == 3) {
+		PyTuple_SetItem(
+				tup,
+				2,
+				shape);
+		Py_XINCREF(shape);
+
+	}
+
+	if (mDebug) {
+		cerr<<"("
+			<<"'"
+			<<get_object_as_string(PyTuple_GetItem(tup,0))<<"'"
+			<<", '"
+			<<get_object_as_string(PyTuple_GetItem(tup,1))<<"'";
+		if (nel > 1) {
+			cerr <<", "<<nel;
+		}
+		cerr <<")"<<endl;
+	}
+
+
+
+	return(tup);
+
 }
+
+
+// Must decref this arr no matter what. Use Py_XDECREF in case it
+// is NULL
+// AHHHHH!!!!  On my macbook core 2 duo, which is 64-bit, intp is 32-bit!!! Can't 
+// figure out how to make it use 64-bit
+PyObject* Records::Object2IntpArray(PyObject* obj)
+{
+
+	// NPY_DEFAULT is currently NPY_CARRAY
+	int min_depth=0, max_depth=0, flags=NPY_DEFAULT;
+	PyObject* arr=NULL;
+
+	if (obj == NULL || obj == Py_None) {
+		return NULL;
+	}
+
+	PyArray_Descr* descr=NULL;
+	descr = PyArray_DescrNewFromType(NPY_INTP);
+
+	if (descr == NULL) {
+		throw "could not create NPY_INPT descriptor";
+	}
+	// This will steal a reference to descr, so we don't need to decref
+	// descr as long as we decref the array!
+	arr = PyArray_FromAny(obj, descr, min_depth, max_depth, flags, NULL);
+	if (arr == NULL) {
+		throw "Could not convert rows keyword to an array of type NPY_INTP";
+	}
+	return arr;
+}
+
+
+
+void Records::ListStringMatch(
+		vector<string> snames,
+		PyObject* list, 
+		vector<long long>& matchids)
+{
+
+	if (mDebug) {cerr<<"Matching fields to subfields"<<endl;fflush(stdout);}
+	long long len=SequenceCheck(list);
+
+	matchids.clear();
+	if (len <= 0) {
+		// Just return all
+		matchids.resize(snames.size());
+		for (unsigned long long i=0; i<matchids.size(); i++)
+		{
+			matchids[i] = i;
+		}
+	} else {
+		// Get strings from list.
+		vector<string> goodones;
+		for (long long i=0; i<len; i++) {
+			PyObject* item = PySequence_GetItem(list, i);
+			if (!is_python_string(item)) {
+				cerr<<"fields["<<i<<"] is not a string; skipping"<<endl;
+				fflush(stdout);
+			} else {
+				string ts = get_object_as_string(item);
+				goodones.push_back(ts);
+			}
+		}
+		if (goodones.size() == 0) {
+			throw "None of the requested fields are in string form";
+		} else {
+			// loop over snames and see which ones match the input list
+			// this preserves order, which is important.
+			for (unsigned long long i=0; i<snames.size(); i++) {
+				string name=snames[i];
+				// See if there is a match
+				vector<string>::iterator matchel;
+				matchel = find(goodones.begin(),goodones.end(),name);
+				if (matchel != goodones.end()) {
+					matchids.push_back(i);
+				}
+			}
+		}
+	}
+	if (matchids.size() == 0) {
+		throw "None of the requested field names matched";
+	}
+
+}
+
+
+long long Records::SequenceCheck(PyObject* obj)
+{
+	if (obj == NULL) {
+		return -1;
+	}
+	long long len=0;
+	// The docs claim this check always succeeds, but not on NULL
+	if (PySequence_Check(obj)) {
+		len=PySequence_Size(obj);
+	} else {
+		len=-1;
+	}
+	return len;
+
+}
+*/
 
 
 
@@ -1141,27 +1495,27 @@ PyObject* Records::Write(
 	mPadNull = padnull;
 	mIgnoreNull = ignorenull;
 
-	CopyFieldInfo(descr);
+	copy_field_info(descr);
 
 	mNfields = mNames.size();
 
 	mData = (char* ) PyArray_DATA(obj);
 
-	if (mDebug) DebugOut("Writing data");
+	if (mDebug) debugout("Writing data");
 	if (mFileType == BINARY_FILE) {
 		WriteAllAsBinary();
 	} else{
 		WriteRows();
 	}
 
-	if (mDebug) DebugOut("Finished writing");
+	if (mDebug) debugout("Finished writing");
 	return(ret);
 }
 
 void Records::WriteAllAsBinary()
 {
 	// This is easy!
-	if (mDebug) DebugOut("Writing in one big fwrite");
+	if (mDebug) debugout("Writing in one big fwrite");
 	npy_intp nwrite = fwrite(mData, mRowSize, mNrows, mFptr);
 	if (nwrite < mNrows) {
 		stringstream serr;
@@ -1181,7 +1535,7 @@ void Records::WriteRows()
 		cerr<<"Writing "<<mNrows<<" rows as ASCII"<<endl;
 		fflush(stdout);
 	}
-	if (mDebug) DebugOut("Writing rows");
+	if (mDebug) debugout("Writing rows");
 	for (long long row=0; row< mNrows; row++) {
 		for (long long fnum=0; fnum< mNfields; fnum++) {
 
@@ -1411,10 +1765,11 @@ void Records::WriteNumberAsAscii(char* buffer, long long type)
 
 
 
+/*
 void Records::ProcessFieldsToRead(PyObject* fields)
 {
 
-	if (mDebug) DebugOut("Processing requested fields");
+	if (mDebug) debugout("Processing requested fields");
 	mKeep.resize(mNfields, 0);
 	if (fields == NULL || fields == Py_None) {
 		mKeepNfields = mNfields;
@@ -1430,7 +1785,7 @@ void Records::ProcessFieldsToRead(PyObject* fields)
 	}
 
 	// This tells us if we keep a given field
-	if (mDebug) DebugOut("Setting mKeep vector");
+	if (mDebug) debugout("Setting mKeep vector");
 	for (long long i=0; i<mKeepNfields; i++) {
 		mKeep[ mKeepId[i] ] = 1;
 	}
@@ -1440,39 +1795,6 @@ void Records::ProcessFieldsToRead(PyObject* fields)
 		fflush(stdout);
 	}
 
-}
-
-npy_intp Records::ProcessSlice(npy_intp row1, npy_intp row2, npy_intp step)
-{
-	// Just do some error checking on the requested rows
-	stringstream serr;
-	if (row1 < 0) {
-		serr<<"Requested first row < 0";
-		throw serr.str().c_str();
-	}
-	if (row2 > mNrows) {
-		serr<<"Requested slice beyond delcared size "<<mNrows;
-		throw serr.str().c_str();
-	}
-
-	if (step <= 0) {
-		serr<<"Requested step must be > 0";
-		throw serr.str().c_str();
-	}
-
-	// we use python slicing rules:  [n1:n2:step] really means  from n1 to n2-1
-	// so the number of rows to read is simply (n2-n1)/step + (n2-21) % step
-	npy_intp rdiff = (row2-row1);
-
-	npy_intp extra = 0;
-	if ((rdiff % step) != 0) {
-		extra = 1;
-	}
-	npy_intp nrows = rdiff/step + extra;
-
-
-	if (mDebug) cerr<<"slice: ("<<row1<<", "<<row2<<", "<<step<<") nrows: "<<nrows<<"/"<<mNrows<<"\n";
-	return nrows;
 }
 
 
@@ -1502,17 +1824,9 @@ void Records::ProcessRowsToRead(PyObject* rows)
 	}
 }
 
+*/
 
-void Records::ProcessNrows(long long nrows) 
-{
-	if (mDebug) {cerr<<"nrows = "<<nrows<<endl;fflush(stdout);}
-	if (nrows < 1) {
-		throw "Input nrows must be >= 1";
-	}
-	mNrows = nrows;
-}
-
-void Records::ProcessDescr(PyObject* descr)
+void Records::process_descriptor(PyObject* descr)
 {
 	if (descr == NULL) {
 		throw "Input descr is NULL";
@@ -1530,7 +1844,7 @@ void Records::ProcessDescr(PyObject* descr)
 	Py_XINCREF(descr);
 
 	// Copy info for each field into a simpler form
-	CopyFieldInfo( (PyArray_Descr* ) mTypeDescr );
+	copy_field_info( (PyArray_Descr* ) mTypeDescr );
 
 	// Each vector should now be number of fields long
 	mNfields = mNames.size();
@@ -1539,7 +1853,7 @@ void Records::ProcessDescr(PyObject* descr)
 
 void Records::GetFptr(const char *filename, const char* mode)
 {
-	if (mDebug) DebugOut("Getting fptr");
+	if (mDebug) debugout("Getting fptr");
 
     string fstr=filename;
     mFptr = fopen(fstr.c_str(), mode);
@@ -1583,10 +1897,10 @@ void Records::SetFileType()
 {
 	if (mDelim == "") {
 		mFileType = BINARY_FILE;
-		if (mDebug) DebugOut("File type set to BINARY_FILE");
+		if (mDebug) debugout("File type set to BINARY_FILE");
 	} else {
 		mFileType = ASCII_FILE;
-		if (mDebug) DebugOut("File type set to ASCII_FILE");
+		if (mDebug) debugout("File type set to ASCII_FILE");
 	}
 
 }
@@ -1594,374 +1908,26 @@ void Records::SetFileType()
 
 
 
-// given a numpy  PyArray_Descr* and a list of field names return a new
-// type descriptor containing only the subset
-void Records::SubDtype(
-		PyObject* indescr, 
-		PyObject* subnamesobj,
-		PyObject** newdescr,
-		vector<long long>& matchids) {
 
-	PyArray_Descr* descr=(PyArray_Descr* ) indescr;
-	//vector<string> names;
-
-	// make string vector
-	//CopyDescrOrderedNames(descr);
-
-	// This makes sure they end up in the original order: important
-	// for skipping fields and such
-	
-	// First deal with a scalar string or list input
-	if (PyList_Check(subnamesobj)) {
-		ListStringMatch(mNames, subnamesobj, matchids);
-	} else if (is_python_string(subnamesobj)) {
-		// Must decref
-		PyObject* tmplist = PyList_New(0);
-		// Makes a copy on append.
-		PyList_Append(tmplist, subnamesobj);
-		ListStringMatch(mNames, tmplist, matchids);
-		Py_XDECREF(tmplist);
-	} else {
-		throw "fields keyword must be string or list";
-	}
-	vector<string> matchnames;
-	matchnames.resize(matchids.size());
-	for (unsigned long long i=0; i<matchids.size(); i++) {
-		//matchnames[i] = names[matchids[i]];
-		matchnames[i] = mNames[matchids[i]];
-	}
-
-	// Now based on the matches create a new dtype
-	*newdescr = ExtractSubDescr(descr, matchnames);
-
-}
-
-
-
-
-// Extract a subset of the fields from a PyArray_Descr and return a new
-// descr with that info
-PyObject* Records::ExtractSubDescr(
-		PyArray_Descr* descr, 
-		vector<string>& names)
-{
-
-	PyArray_Descr *fdescr=NULL;
-	char* title=NULL;
-	long long offset;
-
-	PyObject* dlist=PyList_New(0);
-	PyArray_Descr* newdescr=NULL;
-
-	if (mDebug) {cerr<<"Extracting sub descr"<<endl;fflush(stdout);}
-	for (unsigned long long i=0; i<names.size(); i++) {
-		PyObject* item =
-			PyDict_GetItemString(descr->fields, names[i].c_str());
-
-		if (item!=NULL) {
-			if (!PyArg_ParseTuple(item, "Oi|O", &fdescr, &offset, &title)) {
-				if (mDebug) 
-				{cerr<<"Field: "<<names[i]<<" not right format"<<endl;}
-			} else {
-
-				PyObject* tup = 
-					FieldDescriptorAsTuple(fdescr, names[i].c_str());
-
-				// copy is made of tuple
-				if (PyList_Append(dlist, tup) != 0) {
-					throw "Could not append to list";
-				}
-				Py_XDECREF(tup);
-
-			}
-		} else {
-			if (mDebug) 
-			{cerr<<"field: "<<names[i]<<" does not exist. offset->-1"<<endl;}
-		}
-	}
-
-	// Now convert this list to a descr
-	if (mDebug) {cerr<<"Converting list to descr"<<endl;fflush(stdout);}
-	if (!PyArray_DescrConverter(dlist, &newdescr)) {
-		throw "data type not understood";
-	}
-	if (mDebug) {cerr<<"  Done"<<endl;fflush(stdout);};
-
-	return( (PyObject* )newdescr);
-}
-
-
-
-
-
-
-
-
-// Copy some info from a fields["fname"].descr into a tuple
-// This will become part of a list of tuples dtype send to the converter
-PyObject* Records::FieldDescriptorAsTuple(PyArray_Descr* fdescr, const char* name)
-{
-	// Use a string stream to convert all the char and possible int
-	// elements of a type string
-	stringstream typestream (stringstream::in | stringstream::out);
-	string typestring;
-
-	long long nel=0, tupsize=0;
-	PyObject* shape=NULL;
-	if (fdescr->subarray != NULL) {
-		// This is a sub-array and requires the tuple to have a
-		// length specified Here we are implicitly only allowing
-		// subarrays of basic numbers or strings
-
-		typestream << fdescr->subarray->base->byteorder;
-		typestream << fdescr->subarray->base->type;
-		if (fdescr->subarray->base->type_num == NPY_STRING) {
-			typestream << fdescr->subarray->base->elsize;
-		}
-		nel = fdescr->elsize/fdescr->subarray->base->elsize;
-
-		// Need to incref this because the PyTuple_SetItem will
-		// steal a reference
-		shape = fdescr->subarray->shape;
-		tupsize=3;
-	} else {
-		typestream << fdescr->byteorder;
-		typestream << fdescr->type;
-		if (fdescr->type_num == NPY_STRING) {
-			typestream << fdescr->elsize;
-		}
-		nel = 1;
-		tupsize=2;
-	}
-
-	typestream >> typestring;
-
-	// A copy is made when inserting into the list 
-	// so we need to decref this
-	PyObject* tup=PyTuple_New(tupsize);
-
-	// In setitems references are stolen, so better to just
-	// put the expressions in there than possibly worry later
-	// about references
-	PyTuple_SetItem(
-			tup,
-			0,
-#if PY_MAJOR_VERSION >= 3
-			PyBytes_FromString(name)
-#else
-			PyString_FromString(name)
-#endif
-    );
-	PyTuple_SetItem(
-			tup,
-			1,
-#if PY_MAJOR_VERSION >= 3
-			PyBytes_FromString(typestring.c_str())
-#else
-			PyString_FromString(typestring.c_str())
-#endif
-    );
-
-	if (tupsize == 3) {
-		PyTuple_SetItem(
-				tup,
-				2,
-				shape);
-		Py_XINCREF(shape);
-
-	}
-
-	if (mDebug) {
-		cerr<<"("
-			<<"'"
-			<<get_object_as_string(PyTuple_GetItem(tup,0))<<"'"
-			<<", '"
-			<<get_object_as_string(PyTuple_GetItem(tup,1))<<"'";
-		if (nel > 1) {
-			cerr <<", "<<nel;
-		}
-		cerr <<")"<<endl;
-	}
-
-
-
-	return(tup);
-
-}
-
-
-// Must decref this arr no matter what. Use Py_XDECREF in case it
-// is NULL
-// AHHHHH!!!!  On my macbook core 2 duo, which is 64-bit, intp is 32-bit!!! Can't 
-// figure out how to make it use 64-bit
-PyObject* Records::Object2IntpArray(PyObject* obj)
-{
-
-	// NPY_DEFAULT is currently NPY_CARRAY
-	int min_depth=0, max_depth=0, flags=NPY_DEFAULT;
-	PyObject* arr=NULL;
-
-	if (obj == NULL || obj == Py_None) {
-		return NULL;
-	}
-
-	PyArray_Descr* descr=NULL;
-	descr = PyArray_DescrNewFromType(NPY_INTP);
-
-	if (descr == NULL) {
-		throw "could not create NPY_INPT descriptor";
-	}
-	// This will steal a reference to descr, so we don't need to decref
-	// descr as long as we decref the array!
-	arr = PyArray_FromAny(obj, descr, min_depth, max_depth, flags, NULL);
-	if (arr == NULL) {
-		throw "Could not convert rows keyword to an array of type NPY_INTP";
-	}
-	return arr;
-}
-
-
-
-void Records::ListStringMatch(
-		vector<string> snames,
-		PyObject* list, 
-		vector<long long>& matchids)
-{
-
-	if (mDebug) {cerr<<"Matching fields to subfields"<<endl;fflush(stdout);}
-	long long len=SequenceCheck(list);
-
-	matchids.clear();
-	if (len <= 0) {
-		// Just return all
-		matchids.resize(snames.size());
-		for (unsigned long long i=0; i<matchids.size(); i++)
-		{
-			matchids[i] = i;
-		}
-	} else {
-		// Get strings from list.
-		vector<string> goodones;
-		for (long long i=0; i<len; i++) {
-			PyObject* item = PySequence_GetItem(list, i);
-			if (!is_python_string(item)) {
-				cerr<<"fields["<<i<<"] is not a string; skipping"<<endl;
-				fflush(stdout);
-			} else {
-				string ts = get_object_as_string(item);
-				goodones.push_back(ts);
-			}
-		}
-		if (goodones.size() == 0) {
-			throw "None of the requested fields are in string form";
-		} else {
-			// loop over snames and see which ones match the input list
-			// this preserves order, which is important.
-			for (unsigned long long i=0; i<snames.size(); i++) {
-				string name=snames[i];
-				// See if there is a match
-				vector<string>::iterator matchel;
-				matchel = find(goodones.begin(),goodones.end(),name);
-				if (matchel != goodones.end()) {
-					matchids.push_back(i);
-				}
-			}
-		}
-	}
-	if (matchids.size() == 0) {
-		throw "None of the requested field names matched";
-	}
-
-}
-
-long long Records::SequenceCheck(PyObject* obj)
-{
-	if (obj == NULL) {
-		return -1;
-	}
-	long long len=0;
-	// The docs claim this check always succeeds, but not on NULL
-	if (PySequence_Check(obj)) {
-		len=PySequence_Size(obj);
-	} else {
-		len=-1;
-	}
-	return len;
-
-}
-
-void Records::DebugOut(const char* mess)
+void Records::debugout(const char* mess)
 {
 	cerr<<mess<<endl;
 	fflush(stdout);
 }
 
-PyObject* Records::Test()
-{
-
-	FILE* fptr;
-	fptr = mFptr;
-	mFptr = stdout;
-
-	npy_float32 f32=-3.3123423e15;
-	npy_float64 f64=1.234312341324e-16;
-
-	npy_int32 i32 = 1234141;
-	npy_int64 i64 = 83234321;
-
-	char* p;
-
-
-
-	printf("\n\ti32 = ");
-	p = (char *) &i32;
-	WriteNumberAsAscii(p, NPY_INT32);
-	printf("\n\ti64 = ");
-	p = (char *) &i64;
-	WriteNumberAsAscii(p, NPY_INT64);
-	printf("\n\tf32 = ");
-	p = (char *) &f32;
-	WriteNumberAsAscii(p, NPY_FLOAT32);
-	printf("\n\tf64 = ");
-	p = (char *) &f64;
-	WriteNumberAsAscii(p, NPY_FLOAT64);
-
-
-	printf("\n\n");
-
-	mFptr=fptr;
-
-	return PyLong_FromLong(0);
-}
-
-void Records::PyDictPrintKeys(PyObject* dict)
-{
-	PyObject* keys = PyDict_Keys(dict);
-
-	long long len=SequenceCheck(keys);
-	for (long long i=0; i<len; i++) {
-		PyObject* item = PyList_GetItem(keys, i);
-		cerr<<"key["<<i<<"] = "<<get_object_as_string(item)<<endl;
-		Py_XDECREF(item);
-	}
-
-	Py_XDECREF(keys);
-	fflush(stdout);
-}
-
 
 // These get functions do not rely on internal data
-void Records::CopyFieldInfo(PyArray_Descr* descr)
+void Records::copy_field_info(PyArray_Descr* descr)
 {
-	if (mDebug) DebugOut("Copying field info");
-	if (mDebug) DebugOut("Copying ordered names");
-	CopyDescrOrderedNames(descr);
-	if (mDebug) DebugOut("Copying offsets");
-	CopyDescrOrderedOffsets(descr);
+	if (mDebug) debugout("Copying field info");
+	if (mDebug) debugout("Copying ordered names");
+	copy_descr_ordered_names(descr);
+	if (mDebug) debugout("Copying offsets");
+	copy_descr_ordered_offsets(descr);
 	mRowSize= descr->elsize;
 }
 
-void Records::CopyDescrOrderedNames(PyArray_Descr* descr)
+void Records::copy_descr_ordered_names(PyArray_Descr* descr)
 {
 	// Get the ordered names
 	mNames.clear();
@@ -1976,7 +1942,7 @@ void Records::CopyDescrOrderedNames(PyArray_Descr* descr)
 
 }
 
-void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
+void Records::copy_descr_ordered_offsets(PyArray_Descr* descr)
 {
 
 	mOffsets.assign(mNames.size(), -1);
@@ -2071,11 +2037,11 @@ void Records::CopyDescrOrderedOffsets(PyArray_Descr* descr)
 		}
 	}
 
-	if (mDebug) DebugOut("  Done");
+	if (mDebug) debugout("  Done");
 }
 
 
-void Records::MakeScanFormats(vector<string> &formats, bool add_delim)
+void Records::make_scan_formats(vector<string> &formats, bool add_delim)
 {
 
 	formats.clear();
@@ -2134,10 +2100,10 @@ void Records::MakeScanFormats(vector<string> &formats, bool add_delim)
 	}
 }
 
-void Records::MakePrintFormats(vector<string> &formats)
+void Records::make_print_formats(vector<string> &formats)
 {
 
-	MakeScanFormats(formats,false);
+	make_scan_formats(formats,false);
 	
 	formats[NPY_FLOAT] = "%.7g";
     // for g the .16 means 16 total, 15 mantissa which is what we want for double

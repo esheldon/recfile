@@ -40,11 +40,13 @@ class Records {
 
 		// Some documentation.  SWIG can use this to make a python doc
 		// string
+        /*
 		PyObject* Read(
 				PyObject* rows=NULL,
 				PyObject* fields=NULL) throw (const char*);
 
         PyObject* ReadSlice(long long row1, long long row2, long long step) throw (const char*);
+        */
 
 
 		PyObject* Write(
@@ -53,7 +55,7 @@ class Records {
 				bool ignorenull=false) throw (const char *);
 
 
-		void Close() throw (const char*);
+		void close() throw (const char*);
 
         PyObject* write_string(PyObject* obj) throw (const char* );
         PyObject* update_row_count(long nrows) throw (const char* );
@@ -71,6 +73,10 @@ class Records {
 
     private:
 
+		// Check the input nrows and copy to mNrows
+		void process_nrows(long long nrows); 
+
+		void do_seek(npy_intp seek_distance);
         void goto_offset(void);
 
         // new style
@@ -91,23 +97,29 @@ class Records {
                                PyObject* rows) throw (const char* );
 
 
-		// Move this to public when needed for testing
-        PyObject* Test();
+		// Initialize member variables
+		void init_variables();
+
 
         void ensure_writable(void) throw (const char* );
         void ensure_readable(void) throw (const char* );
         void ensure_binary(void) throw (const char* );
         void ensure_text(void) throw (const char* );
 
+        npy_intp process_slice(npy_intp row1, npy_intp row2, npy_intp step);
+		void skip_rows(long long current_row, long long row2read);
+		void skip_text_rows(long long nskip);
+		void skip_binary_rows(long long nskip);
 
-		// Initialize member variables
-		void InitializeVariables();
+		void make_scan_formats(vector<string> &formats, bool add_delim);
+		void make_print_formats(vector<string> &formats);
+
 
 		// Create an output array.  Data are copied here when reading
+        /*
 		void CreateOutputArray();
 
 		void ReadPrepare();
-        npy_intp ProcessSlice(npy_intp row1, npy_intp row2, npy_intp step);
 		void ReadFromFile();
 		void ReadAllAsBinary();
 
@@ -118,7 +130,6 @@ class Records {
 		void ReadRow();
 		void ReadAsciiFields();
 		void ReadBinaryFields();
-		void DoSeek(npy_intp seek_distance);
 		//void ReadField(long long fnum);
 		void ReadFieldAsBinary(long long fnum);
 		void ReadFieldAsAscii(long long fnum);
@@ -128,18 +139,37 @@ class Records {
 		void SkipFieldAsBinary(long long fnum);
 		void SkipFieldAsAscii(long long fnum);
 		void ReadWholeRowBinary();
-		void SkipRows(long long current_row, long long row2read);
-		void SkipAsciiRows(long long nskip);
-		void SkipBinaryRows(long long nskip);
 
-		void MakeScanFormats(vector<string> &formats, bool add_delim);
-		void MakePrintFormats(vector<string> &formats);
+		// Process the rows keyword and get a version that is an array
+		void ProcessRowsToRead(PyObject* rows);
+		// Process the fields keyword and extract a sub descr if necessary
+		void ProcessFieldsToRead(PyObject* fields);
+
+
 
 		void SubDtype(
 				PyObject* descr, 
 				PyObject* subnames,
 				PyObject** newdescr,
 				vector<long long>& matchids);
+		void ListStringMatch(
+				vector<string> snames,
+				PyObject* list, 
+				vector<long long>& matchids);
+
+		// Copy some info from a fields["fname"].descr into a tuple This will
+		// become part of a list of tuples dtype send to the converter
+		PyObject* FieldDescriptorAsTuple(
+				PyArray_Descr* fdescr, const char* name);
+
+		long long SequenceCheck(PyObject* obj);
+
+		// Must decref this arr no matter what. Use Py_XDECREF in case it
+		// is NULL
+		PyObject* Object2IntpArray(PyObject* obj);
+
+
+        */
 
 		PyObject* ExtractSubDescr(
 				PyArray_Descr* descr, 
@@ -154,25 +184,9 @@ class Records {
 		void WriteStringAsAscii(long long fnum);
 
 
-		void ListStringMatch(
-				vector<string> snames,
-				PyObject* list, 
-				vector<long long>& matchids);
-
-		// Copy some info from a fields["fname"].descr into a tuple This will
-		// become part of a list of tuples dtype send to the converter
-		PyObject* FieldDescriptorAsTuple(
-				PyArray_Descr* fdescr, const char* name);
-
-		long long SequenceCheck(PyObject* obj);
-
-		void CopyFieldInfo(PyArray_Descr* descr);
-		void CopyDescrOrderedNames(PyArray_Descr* descr);
-		void CopyDescrOrderedOffsets(PyArray_Descr* descr);
-
-		// Must decref this arr no matter what. Use Py_XDECREF in case it
-		// is NULL
-		PyObject* Object2IntpArray(PyObject* obj);
+		void copy_field_info(PyArray_Descr* descr);
+		void copy_descr_ordered_names(PyArray_Descr* descr);
+		void copy_descr_ordered_offsets(PyArray_Descr* descr);
 
 		// Get the file pointer or open the file if it is a string.  
 		void GetFptr(const char* filename, const char* mode);
@@ -183,17 +197,9 @@ class Records {
 		// Check the input and if good copy into mDelim string
 		void ProcessDelim(PyObject* delim_obj);
 		// Check the input descr and get a new reference to it in mTypeDescr
-		void ProcessDescr(PyObject* descr);
-		// Check the input nrows and copy to mNrows
-		void ProcessNrows(long long nrows); 
+		void process_descriptor(PyObject* descr);
 
-		// Process the rows keyword and get a version that is an array
-		void ProcessRowsToRead(PyObject* rows);
-		// Process the fields keyword and extract a sub descr if necessary
-		void ProcessFieldsToRead(PyObject* fields);
-
-		void DebugOut(const char* mess);
-		void PyDictPrintKeys(PyObject* dict);
+		void debugout(const char* mess);
 
 
 
@@ -235,12 +241,6 @@ class Records {
 
 		// Reading as binary or ascii?
 		bool mReadAsWhitespace;                                //---
-
-		// Read whole file with big fread?
-		bool mReadWholeFileBinary;
-		// Can read whole rows in binary?
-		bool mReadWholeRowBinary;                              //---
-
 
 		bool mPadNull;
 		bool mIgnoreNull;
