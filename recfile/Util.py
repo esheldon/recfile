@@ -162,9 +162,6 @@ class Recfile(object):
                 # etc
 
     """
-
-    __doc__=Open.__doc__
-
     def __init__(self, filename, mode='r', **keys):
         self.open(filename, mode=mode, **keys)
 
@@ -259,6 +256,24 @@ class Recfile(object):
                 ignorenull=self.ignorenull,
             )
 
+    def close(self):
+        """
+        Close any open file object.  Make sure various things are None
+        """
+        self.offset=0
+        self.delim=None
+        self.nrows=0
+        self.dtype=None
+        if hasattr(self, 'robj'):
+            if self.robj is not None:
+                self.robj.close()
+        self.robj=None
+
+        self.padnull=False
+        self.ignorenull=False
+
+
+
     def _count_nrows(self):
         """
         get the number of rows in the file
@@ -283,23 +298,6 @@ class Recfile(object):
                 nrows = datasize//rowsize
 
         return nrows
-
-
-    def close(self):
-        """
-        Close any open file object.  Make sure fobj, _hdr, and delim are None
-        """
-        self.offset=0
-        self.delim=None
-        self.nrows=0
-        self.dtype=None
-        if hasattr(self, 'robj'):
-            if self.robj is not None:
-                self.robj.close()
-        self.robj=None
-
-        self.padnull=False
-        self.ignorenull=False
 
 
     def __repr__(self):
@@ -523,7 +521,7 @@ class Recfile(object):
         else:
             unpack=False
 
-        res, isrows, isslice = self.process_args_as_rows_or_columns(arg, unpack=unpack)
+        res, isrows, isslice = self._process_args_as_rows_or_columns(arg, unpack=unpack)
         if isrows:
             # rows were entered: read all columns
             if isslice:
@@ -591,7 +589,7 @@ class Recfile(object):
         """
         return RecfileSubset(self, rows=rows, fields=fields, columns=columns)
 
-    def process_args_as_rows_or_columns(self, arg, unpack=False):
+    def _process_args_as_rows_or_columns(self, arg, unpack=False):
         """
 
         args must be a tuple.  Only the first one or two args are used.
@@ -626,10 +624,10 @@ class Recfile(object):
             isrows=True
             if unpack:
                 isslice=False
-                result = self.slice2rows(arg.start, arg.stop, arg.step)
+                result = self._slice2rows(arg.start, arg.stop, arg.step)
             else:
                 isslice=True
-                result = self.process_slice(arg)
+                result = self._process_slice(arg)
         else:
             # a single object was entered.  Probably should apply some more 
             # checking on this
@@ -637,7 +635,7 @@ class Recfile(object):
 
         return result, isrows, isslice
 
-    def process_slice(self, arg):
+    def _process_slice(self, arg):
         start = arg.start
         stop = arg.stop
         step = arg.step
@@ -663,91 +661,8 @@ class Recfile(object):
 
         return slice(start, stop, step)
 
-    def __getitem__old(self, arg):
-        """
-        sf = Recfile(....)
 
-        # read subsets of columns and/or rows from the file.  Note, lists
-        # of columns or rows cannot be tuples, due to how the __getitem__
-        # call works.
-
-        # read subsets of columns
-        data = sf['fieldname']
-        data = sf[ ['field1','field2',...] ]    # can also be an array
-
-        # read subsets of rows
-        data = sf[ 35 ]
-        data = sf[ 35:88 ]
-        data = sf[ [3,234,5551,.. ] ]           # can also be an array
-
-        # read subset of rows *and* columns.
-        data = sf['fieldname', 3:58]
-        data = sf[rowlist, fieldlist]
-        data = sf[fieldlist,rowlist]
-
-        If a single argument is entered, that is set to arg.
-        If more than one is entered, arg is set to a tuple.  d'oh!,  Hard
-            to parse
-        """
-        if not isinstance(arg,tuple):
-            send_arg = (arg,)
-        else:
-            send_arg = arg
-
-        rows, columns = self.process_args_as_rows_and_columns(send_arg)
-        return self.read(rows=rows, columns=columns)
-
-
-    def process_args_as_rows_and_columns(self, args):
-        """
-
-        args must be a tuple.  Only the first one or two args are used.
-
-        We must be able to interpret the args as as either a column name or
-        row number, or sequences thereof.  Numpy arrays and slices are also
-        fine.
-
-        Examples:
-
-            Single arguments:
-                ( 'field1', )
-                ( 54, )
-                ( ('f1','f2'), )
-                ( [3,4,5,6], )
-            Two arguments:
-                ( 'field36', 27 )
-                ( [33,44], ['ra','dec','flux'] )
-                ( 'ra', slice(5,10) )
-
-        Returns rows,columns but one will be None.  If both entries can be
-        interpreted as rows, the last is used.  Similarly for fields.
-
-        """
-
-        columns=None
-        rows=None
-
-        for arg in args[0:2]:
-
-            if isinstance(arg, (tuple,list,numpy.ndarray)):
-                # a sequence was entered
-                if isstring(arg[0]):
-                    columns = arg
-                else:
-                    rows = arg
-            elif isstring(arg):
-                # a single string was entered
-                columns = arg
-            elif isinstance(arg, slice):
-                rows = self.slice2rows(arg.start, arg.stop, arg.step)
-            else:
-                # a single object was entered.  Probably should apply some more 
-                # checking on this
-                rows=arg
-
-        return rows, columns
-
-    def slice2rows(self, start, stop, step=None):
+    def _slice2rows(self, start, stop, step=None):
         if start is None:
             start=0
         if stop is None:
@@ -979,7 +894,7 @@ class RecfileColumnSubset(object):
         # be a slice...
 
         res, isrows, isslice = \
-            self.recfile.process_args_as_rows_or_columns(arg, unpack=True)
+            self.recfile._process_args_as_rows_or_columns(arg, unpack=True)
         if isrows:
             # rows was entered: read all current column subset
             return self.read(rows=res)
