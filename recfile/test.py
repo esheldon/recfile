@@ -255,17 +255,14 @@ class TestReadWrite(unittest.TestCase):
                         self.compare_array(self.data[f][rows], d, "test read rows %s column subset" % f)
 
                     if delim is None:
-                        # list of columns
                         cols=['u2scalar','f4vec','Sarr']
+
                         #print("delim: '%s' columns:" % delim,cols)
 
+                        # column subset
                         d = robj.read(columns=cols)
                         for f in d.dtype.names:
                             self.compare_array(self.data[f], d[f], "test column list %s" % f)
-
-                        d = robj[cols][:]
-                        for f in d.dtype.names:
-                            self.compare_array(self.data[f], d[f], "test column list %s slice" % f)
 
                         # column subset and rows subset
                         d = robj[cols][rows]
@@ -276,9 +273,20 @@ class TestReadWrite(unittest.TestCase):
                         for f in d.dtype.names:
                             self.compare_array(self.data[f][rows], d[f], "test column list %s row subset" % f)
 
+                        # combined with row slices
+
+                        d = robj[cols][:]
+                        for f in d.dtype.names:
+                            self.compare_array(self.data[f], d[f], "test column list %s slice" % f)
+
                         d = robj[cols][1:3]
                         for f in d.dtype.names:
                             self.compare_array(self.data[f][1:3], d[f], "test column list %s row slice" % f)
+
+                        d = robj[cols][0:4:2]
+                        for f in d.dtype.names:
+                            self.compare_array(self.data[f][0:4:2], d[f], "test column list %s row slice step 2" % f)
+
 
 
                     """

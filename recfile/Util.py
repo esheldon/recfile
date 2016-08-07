@@ -1,6 +1,5 @@
 """
 TODO
-    - read binary slice
     - read ascii slice
         - just use standard reader?  Yes I think.
     - read rows binary
