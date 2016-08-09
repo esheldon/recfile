@@ -239,75 +239,81 @@ class TestReadWrite(unittest.TestCase):
             for doswap in [False,True]:
                 sstr = " doswap: %s" % doswap
 
+                if doswap:
+                    data = self.swap_data
+                else:
+                    data = self.data
+
+
                 try:
                     fname=self._get_testfile("testSubsets",delim)
                     with Recfile(fname,mode='w',delim=delim) as robj:
                         # initial write
-                        robj.write(self.data)
+                        robj.write(data)
 
                     with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
 
                         # row slices
                         d=robj[:]
-                        self.compare_rec(self.data, d, "row range all"+sstr)
+                        self.compare_rec(data, d, "row range all"+sstr)
 
                         d=robj[1:3]
-                        self.compare_rec(self.data[1:3], d, "row range"+sstr)
+                        self.compare_rec(data[1:3], d, "row range"+sstr)
 
                         d=robj[0:4:2]
-                        self.compare_rec(self.data[0:4:2], d, "row range step 2"+sstr)
+                        self.compare_rec(data[0:4:2], d, "row range step 2"+sstr)
 
                         # test reading single columns
-                        for f in self.data.dtype.names:
+                        for f in data.dtype.names:
                             d = robj[f][:]
 
 
                             d = robj.read(columns=f)
-                            self.compare_array(self.data[f], d, "test read all rows %s column subset scalar name %s" % (f,sstr))
+                            self.compare_array(data[f], d, "test read all rows %s column subset scalar name %s" % (f,sstr))
 
                             d = robj.read(columns=[f])
-                            self.compare_array(self.data[f], d[f], "test read all rows %s column subset %s" % (f,sstr))
+                            self.compare_array(data[f], d[f], "test read all rows %s column subset %s" % (f,sstr))
 
                             d = robj[f][:]
-                            self.compare_array(self.data[f], d, "test read all rows %s column subset slice %s" % (f,sstr))
+                            self.compare_array(data[f], d, "test read all rows %s column subset slice %s" % (f,sstr))
 
                             rows = [1,3]
                             d = robj.read(columns=f, rows=rows)
-                            self.compare_array(self.data[f][rows], d, "test read rows %s column subset scalar name %s" % (f,sstr))
+                            self.compare_array(data[f][rows], d, "test read rows %s column subset scalar name %s" % (f,sstr))
 
                             d = robj.read(columns=[f], rows=rows)
-                            self.compare_array(self.data[f][rows], d[f], "test read rows %s column subset %s" % (f,sstr))
+                            self.compare_array(data[f][rows], d[f], "test read rows %s column subset %s" % (f,sstr))
 
                         cols=['u2scalar','f4vec','Sarr']
 
                         # column subset
                         d = robj.read(columns=cols)
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f], d[f], "test column list %s %s" % (f,sstr))
+                            self.compare_array(data[f], d[f], "test column list %s %s" % (f,sstr))
 
                         # column subset and rows subset
                         rows = [1,3]
                         d = robj[cols][rows]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][rows], d[f], "test column list %s row subset slice %s" % (f,sstr))
+                            self.compare_array(data[f][rows], d[f], "test column list %s row subset slice %s" % (f,sstr))
 
                         d = robj.read(rows=rows, columns=cols)
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][rows], d[f], "test column list %s row subset %s" % (f,sstr))
+                            self.compare_array(data[f][rows], d[f], "test column list %s row subset %s" % (f,sstr))
 
                         # combined with row slices
 
                         d = robj[cols][:]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f], d[f], "test column list %s slice %s" % (f,sstr))
+                            self.compare_array(data[f], d[f], "test column list %s slice %s" % (f,sstr))
 
                         d = robj[cols][1:3]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][1:3], d[f], "test column list %s row slice %s" % (f,sstr))
+                            self.compare_array(data[f][1:3], d[f], "test column list %s row slice %s" % (f,sstr))
 
                         d = robj[cols][0:4:2]
                         for f in d.dtype.names:
-                            self.compare_array(self.data[f][0:4:2], d[f], "test column list %s row slice step 2 %s" % (f,sstr))
+                            self.compare_array(data[f][0:4:2], d[f], "test column list %s row slice step 2 %s" % (f,sstr))
 
                 finally:
                     if os.path.exists(fname):
@@ -322,29 +328,35 @@ class TestReadWrite(unittest.TestCase):
         dtype=self.data.dtype
         nrows=self.data.size
         for delim in [None,",", ":","\t", " "]:
+            for doswap in [False,True]:
 
-            try:
-                fname=self._get_testfile("testSubsets",delim)
-                with Recfile(fname,mode='w',delim=delim) as robj:
-                    # initial write
-                    robj.write(self.data)
+                if doswap:
+                    data = self.swap_data
+                else:
+                    data = self.data
 
-                    # appending
-                    data2 = self.data.copy()
-                    data2['f4scalar'] = 3
-                    robj.write(data2)
+                try:
+                    fname=self._get_testfile("testSubsets",delim)
+                    with Recfile(fname,mode='w',delim=delim) as robj:
+                        # initial write
+                        robj.write(data)
 
-                with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
+                        # appending
+                        data2 = data.copy()
+                        data2['f4scalar'] = 3
+                        robj.write(data2)
 
-                    d = robj.read()
-                    self.assertEqual(d.size, self.data.size*2)
+                    with Recfile(fname, mode='r', dtype=dtype, delim=delim) as robj:
 
-                    self.compare_rec(self.data, d[0:self.data.size], "Comparing initial write")
-                    self.compare_rec(data2, d[self.data.size:], "Comparing appended data")
+                        d = robj.read()
+                        self.assertEqual(d.size, data.size*2)
 
-            finally:
-                if os.path.exists(fname):
-                    os.remove(fname)
+                        self.compare_rec(data, d[0:data.size], "Comparing initial write")
+                        self.compare_rec(data2, d[data.size:], "Comparing appended data")
+
+                finally:
+                    if os.path.exists(fname):
+                        os.remove(fname)
 
 
     def compare_names(self, read_names, true_names, lower=False, upper=False):
