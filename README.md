@@ -51,37 +51,36 @@ with Recfile(fname, mode="r", dtype=dtype) as robj:
     data = robj[column_list][rowlist]
     data = robj['field3'].read()
 
-    # Read from a CSV file of the same structure, and only read a subset
-    # of the data.  Nrows can be specified to speed up reading if known,
-    # otherwise they will be counted, which is slow for text.
-
-    rows2get=[2335,122332,1550021]
-    fields2get='field2'
-
 #
 # reading text data.  You need to specify a delimiter, e.g. "," for csv
 # " " for whitespace delimited, etc.
 
-with Recfile('test.csv', delim=",", dtype=dtype) as robj:
+with Recfile('test.csv', delim=',', dtype=dtype) as robj:
+
+    rows2get=[2335,122332,1550021]
+    fields2get='field2'
+
     data = robj.read(rows=rows2get, fields=fields2get)
     data = robj[fields2get][rows2get]
 
 # using the convenience function
-data = recfile.read('test.csv', delim=",", dtype=dtype)
+data = recfile.read('test.csv', delim=',', dtype=dtype)
 
 #
 # writing files
 #
 
 from recfile import Recfile
-with Recfile(fname, mode="w") as robj:
+with Recfile(fname, mode='w') as robj:
     robj.write(data1)
     robj.write(data2) # append data
 
-# for updating use mode="r+"
+# for updating use mode='r+'
+
+
 # you can also use close() if you are not in a context
 
-robj = Recfile(fname, mode="w")
+robj = Recfile(fname, mode='w')
 robj.write(data1)
 robj.close()
 
