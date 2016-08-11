@@ -60,10 +60,10 @@ with Recfile(fname, mode="r", dtype=dtype) as robj:
 with Recfile('test.csv', delim=',', dtype=dtype) as robj:
 
     rows2get=[2335,122332,1550021]
-    fields2get='field2'
+    cols2get='field2'
 
-    data = robj.read(rows=rows2get, fields=fields2get)
-    data = robj[fields2get][rows2get]
+    data = robj.read(rows=rows2get, columns=cols2get)
+    data = robj[cols2get][rows2get]
 
 # using the convenience function
 data = recfile.read('test.csv', delim=',', dtype=dtype)
