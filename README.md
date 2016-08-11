@@ -49,6 +49,8 @@ with Recfile(fname, mode="r", dtype=dtype) as robj:
 
     data = robj['field2'][:]
     data = robj[column_list][rowlist]
+
+    # or call .read() explicitly
     data = robj['field3'].read()
 
 #
